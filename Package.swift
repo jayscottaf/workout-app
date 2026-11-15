@@ -6,6 +6,7 @@ import PackageDescription
 
 let package = Package(
     name: "WorkoutCore",
+    platforms: [.macOS(.v14), .iOS(.v17)],
     products: [.library(name: "WorkoutCore", targets: ["WorkoutCore"])],
     targets: [
         .target(name: "WorkoutCore", path: "NextUp/Core"),

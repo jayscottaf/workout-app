@@ -1,0 +1,331 @@
+import SwiftUI
+import SwiftData
+
+/// Each gym with its own equipment. Machines keep separate history per gym; free weights share one.
+struct GymsView: View {
+    @Environment(\.modelContext) private var context
+    @Query(sort: \Gym.createdAt) private var gyms: [Gym]
+    @Query private var workouts: [Workout]
+    @AppStorage("currentGymID") private var currentGymID = ""
+
+    @State private var selectedID: UUID?
+    @State private var showAddGym = false
+    @State private var showAddEquipment = false
+    @State private var editing: Equipment?
+    @State private var renaming = false
+    @State private var nameDraft = ""
+    @State private var confirmDelete = false
+
+    private var currentGym: Gym? { gyms.first { $0.id.uuidString == currentGymID } ?? gyms.first }
+    private var selected: Gym? { gyms.first { $0.id == selectedID } ?? currentGym }
+
+    var body: some View {
+        let gym = selected
+        let counts = sessionCounts()
+
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text("Gyms")
+                        .font(Theme.rounded(34))
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer()
+                    CircleIconButton(systemName: "plus", label: "Add a gym", fill: Theme.surface, foreground: Theme.volt) {
+                        showAddGym = true
+                    }
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(gyms) { item in
+                            Button(item.name) { selectedID = item.id }
+                                .buttonStyle(ChipButtonStyle(fill: item.id == gym?.id ? Theme.volt : Theme.surface,
+                                                             foreground: item.id == gym?.id ? Theme.onVolt : Theme.text))
+                        }
+                    }
+                }
+
+                if let gym {
+                    gymCard(gym)
+                    let shared = gym.sortedEquipment.filter { $0.type?.category != .machine }
+                    let machines = gym.sortedEquipment.filter { $0.type?.category == .machine }
+                    if !shared.isEmpty {
+                        section("Free weights · one history everywhere", shared, counts: counts)
+                    }
+                    if !machines.isEmpty {
+                        section("Machines · tracked separately here", machines, counts: counts)
+                    }
+                    Button("Add equipment") { showAddEquipment = true }
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Theme.volt)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.line, lineWidth: 1))
+                        .buttonStyle(.plain)
+                    Text("Suggestions only use equipment listed here. Set each one's step size to match the real jumps between weights, so \"next weight up\" is a weight you can actually load.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.muted)
+                } else {
+                    Text("Add your first gym to get suggestions that match its equipment.")
+                        .foregroundStyle(Theme.muted)
+                        .card()
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
+        }
+        .screen()
+        .sheet(isPresented: $showAddGym) {
+            AddGymSheet { name, typeIDs in
+                let gym = Store.makeGym(name: name, typeIDs: typeIDs, context: context)
+                try? context.save()
+                selectedID = gym.id
+            }
+        }
+        .sheet(isPresented: $showAddEquipment) {
+            if let gym { AddEquipmentSheet(gym: gym) }
+        }
+        .sheet(item: $editing) { item in
+            EquipmentEditSheet(equipment: item)
+        }
+        .alert("Rename gym", isPresented: $renaming) {
+            TextField("Name", text: $nameDraft)
+            Button("Save") {
+                let name = nameDraft.trimmingCharacters(in: .whitespaces)
+                if !name.isEmpty { gym?.name = name }
+                try? context.save()
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog("Delete \(gym?.name ?? "this gym")? Workouts you logged there are kept.",
+                            isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete gym", role: .destructive) {
+                if let gym {
+                    if gym.id.uuidString == currentGymID { currentGymID = "" }
+                    selectedID = nil
+                    context.delete(gym)
+                    try? context.save()
+                }
+            }
+            Button("Keep it", role: .cancel) {}
+        }
+    }
+
+    private func gymCard(_ gym: Gym) -> some View {
+        let isCurrent = gym.id == currentGym?.id
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(gym.name).font(.system(size: 17, weight: .bold))
+                Text("\(isCurrent ? "You are training here" : "Not your current gym") · \(gym.equipment.count) pieces of equipment")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.muted)
+            }
+            Spacer(minLength: 0)
+            if isCurrent {
+                Text("CURRENT")
+                    .font(.system(size: 12, weight: .heavy))
+                    .foregroundStyle(Theme.volt)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(Theme.voltDim, in: RoundedRectangle(cornerRadius: 8))
+            } else {
+                Button("Train here") { currentGymID = gym.id.uuidString }
+                    .buttonStyle(ChipButtonStyle(fill: Theme.volt, foreground: Theme.onVolt))
+            }
+            Menu {
+                Button("Rename") {
+                    nameDraft = gym.name
+                    renaming = true
+                }
+                if gyms.count > 1 {
+                    Button("Delete gym", role: .destructive) { confirmDelete = true }
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 16, weight: .heavy))
+                    .foregroundStyle(Theme.muted)
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("More options for \(gym.name)")
+        }
+        .card()
+    }
+
+    private func section(_ title: String, _ items: [Equipment], counts: [UUID: Int]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CapsLabel(title)
+            VStack(spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    if index > 0 { Rectangle().fill(Theme.line).frame(height: 1).padding(.leading, 16) }
+                    Button { editing = item } label: {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.name).font(.system(size: 16, weight: .semibold))
+                                Text("\(item.type?.loading ?? "Equipment") · \(Fmt.weight(item.increment)) lb steps")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Theme.muted)
+                            }
+                            Spacer(minLength: 8)
+                            let count = counts[item.id] ?? 0
+                            if count > 0 {
+                                Text("\(count) session\(count == 1 ? "" : "s")")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Theme.muted)
+                            }
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .heavy))
+                                .foregroundStyle(Theme.faint)
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 60)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+    }
+
+    /// How many finished sessions used each piece of equipment.
+    private func sessionCounts() -> [UUID: Int] {
+        var counts: [UUID: Int] = [:]
+        for workout in workouts where workout.endedAt != nil {
+            for entry in workout.entries {
+                if let id = entry.equipmentID { counts[id, default: 0] += 1 }
+            }
+        }
+        return counts
+    }
+}
+
+struct AddGymSheet: View {
+    let onSave: (String, [String]) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var chosen = Set(EquipmentCatalog.commonIDs)
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Name") {
+                    TextField("For example: Downtown gym", text: $name)
+                }
+                Section {
+                    ForEach(EquipmentCatalog.all) { type in
+                        Toggle(type.name, isOn: Binding(
+                            get: { chosen.contains(type.id) },
+                            set: { isOn in
+                                if isOn { chosen.insert(type.id) } else { chosen.remove(type.id) }
+                            }))
+                    }
+                } header: {
+                    Text("What does it have?")
+                } footer: {
+                    Text("Tick what this gym has. You can change this any time.")
+                }
+            }
+            .navigationTitle("New gym")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        let ordered = EquipmentCatalog.all.map(\.id).filter { chosen.contains($0) }
+                        onSave(name.trimmingCharacters(in: .whitespaces), ordered)
+                        dismiss()
+                    }
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+    }
+}
+
+struct AddEquipmentSheet: View {
+    let gym: Gym
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(EquipmentCatalog.all) { type in
+                        let have = gym.equipment.filter { $0.typeID == type.id }.count
+                        Button {
+                            let item = Equipment(typeID: type.id, name: have == 0 ? type.name : "\(type.name) \(have + 1)",
+                                                 increment: type.defaultIncrement)
+                            context.insert(item)
+                            item.gym = gym
+                            try? context.save()
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(type.name).foregroundStyle(Theme.text)
+                                    Text(type.loading).font(.footnote).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if have > 0 {
+                                    Text("\(have) added").font(.footnote).foregroundStyle(.secondary)
+                                }
+                                Image(systemName: "plus.circle.fill").foregroundStyle(Theme.volt)
+                            }
+                        }
+                    }
+                } footer: {
+                    Text("Add the same machine twice if the gym has two that feel different. Each keeps its own history.")
+                }
+            }
+            .navigationTitle("Add to \(gym.name)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+    }
+}
+
+struct EquipmentEditSheet: View {
+    @Bindable var equipment: Equipment
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Name") {
+                    TextField("Name", text: $equipment.name)
+                }
+                Section {
+                    Stepper("Goes up in \(Fmt.weight(equipment.increment)) lb steps", value: $equipment.increment, in: 1...50, step: 2.5)
+                } footer: {
+                    Text(equipment.type?.category == .machine
+                         ? "This machine keeps its own history, because the same number on a different machine is not the same effort."
+                         : "Free weights share one history across all your gyms. Only the step size is specific to this gym.")
+                }
+                Section {
+                    Button("Remove from this gym", role: .destructive) {
+                        let store = context
+                        let removed = equipment
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                            store.delete(removed)
+                            try? store.save()
+                        }
+                    }
+                }
+            }
+            .navigationTitle(equipment.type?.name ?? "Equipment")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        try? context.save()
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}

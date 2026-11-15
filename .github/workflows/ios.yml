@@ -1,0 +1,72 @@
+name: iOS
+
+# Builds the app, runs it in the iPhone simulator through the main flow,
+# and saves a screenshot of every step (download them from the run's "Artifacts").
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rules:
+    name: Rules engine tests
+    runs-on: ubuntu-latest
+    container: swift:6.0
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test
+
+  simulator:
+    name: Build and run in iPhone simulator
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick an iPhone simulator
+        run: |
+          xcodebuild -version
+          UDID=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          devices = json.load(sys.stdin)['devices']
+          runtimes = sorted((k for k in devices if 'iOS' in k), reverse=True)
+          print(next(d['udid'] for k in runtimes for d in devices[k] if d['name'].startswith('iPhone')))
+          ")
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl list devices available | grep "$UDID"
+
+      - name: Build and run the walkthrough in the simulator
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project NextUp.xcodeproj \
+            -scheme NextUp \
+            -destination "platform=iOS Simulator,id=$SIM_UDID" \
+            -resultBundlePath build/Walkthrough.xcresult \
+            | tee build.log | grep -E "error:|warning: unre|Test Case|Test Suite|BUILD|\*\* TEST" || true
+          grep -q "\*\* TEST SUCCEEDED \*\*" build.log
+
+      - name: Show errors if it failed
+        if: failure()
+        run: grep -E "error:|failed|Fatal" build.log | head -80 || tail -80 build.log
+
+      - name: Export screenshots
+        if: always()
+        run: |
+          mkdir -p screenshots
+          xcrun xcresulttool export attachments --path build/Walkthrough.xcresult --output-path screenshots || true
+          ls -la screenshots || true
+
+      - name: Upload screenshots and log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulator-walkthrough
+          path: |
+            screenshots
+            build.log

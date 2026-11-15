@@ -222,10 +222,18 @@ enum DemoData {
         harbor.createdAt = iron.createdAt.addingTimeInterval(1)
 
         let calendar = Calendar.current
-        let offsets = [44, 42, 40, 37, 35, 33, 30, 28, 26, 23, 21, 19, 16, 14, 12, 9, 6, 4]
+        // Three workouts in each of the six previous calendar weeks (days 1, 3 and 5 of the week).
+        var days: [Date] = []
+        if let thisWeek = calendar.dateInterval(of: .weekOfYear, for: now)?.start {
+            for weeksBack in (1...6).reversed() {
+                guard let weekStart = calendar.date(byAdding: .weekOfYear, value: -weeksBack, to: thisWeek) else { continue }
+                for dayOffset in [1, 3, 5] {
+                    if let day = calendar.date(byAdding: .day, value: dayOffset, to: weekStart) { days.append(day) }
+                }
+            }
+        }
         var records: [WorkoutRecord] = []
-        for (i, offset) in offsets.enumerated() {
-            guard let dayStart = calendar.date(byAdding: .day, value: -offset, to: calendar.startOfDay(for: now)) else { continue }
+        for (i, dayStart) in days.enumerated() {
             let start = dayStart.addingTimeInterval(18 * 3600)
             let history = History(records)
             let gym = (i % 5 == 3) ? harbor : iron

@@ -40,7 +40,7 @@ struct SummaryView: View {
                 }
 
                 HStack(spacing: 12) {
-                    stat(durationText, "minutes")
+                    stat(durationText, "time")
                     stat("\(workout.completedSets.count)", "sets")
                     stat(Int(workout.totalVolume).formatted(), "lb moved")
                 }

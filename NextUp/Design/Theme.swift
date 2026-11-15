@@ -76,6 +76,10 @@ extension View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Theme.bg.ignoresSafeArea())
             .foregroundStyle(Theme.text)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                // Keeps scrolled content from showing through behind the clock and battery.
+                Color.clear.frame(height: 0).background(Theme.bg)
+            }
     }
 }
 

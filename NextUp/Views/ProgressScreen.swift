@@ -12,6 +12,7 @@ private struct LiftOption: Identifiable, Hashable {
     let id: String // history key
     let label: String
     let sessions: Int
+    let compound: Bool
 }
 
 /// Records, estimated strength chart, weekly volume per muscle group, calendar and monthly recap.
@@ -78,9 +79,11 @@ struct ProgressScreen: View {
     private func liftOptions(_ finished: [Workout]) -> [LiftOption] {
         var counts: [String: Int] = [:]
         var labels: [String: String] = [:]
+        var compound: [String: Bool] = [:]
         for workout in finished {
             for entry in workout.entries where !entry.completedSets.isEmpty && !entry.isBodyweight {
                 counts[entry.historyKey, default: 0] += 1
+                compound[entry.historyKey] = entry.exercise?.compound ?? false
                 if labels[entry.historyKey] == nil {
                     let onMachine = entry.historyKey.contains("@") && !workout.gymName.isEmpty
                     labels[entry.historyKey] = onMachine ? "\(entry.name) · \(workout.gymName)" : entry.name
@@ -88,8 +91,12 @@ struct ProgressScreen: View {
             }
         }
         return counts
-            .map { LiftOption(id: $0.key, label: labels[$0.key] ?? $0.key, sessions: $0.value) }
-            .sorted { $0.sessions != $1.sessions ? $0.sessions > $1.sessions : $0.label < $1.label }
+            .map { LiftOption(id: $0.key, label: labels[$0.key] ?? $0.key, sessions: $0.value, compound: compound[$0.key] ?? false) }
+            // Big lifts first, then the ones done most often.
+            .sorted {
+                if $0.compound != $1.compound { return $0.compound }
+                return $0.sessions != $1.sessions ? $0.sessions > $1.sessions : $0.label < $1.label
+            }
     }
 
     @ViewBuilder

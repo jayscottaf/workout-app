@@ -191,8 +191,8 @@ struct GymsView: View {
     private func sessionCounts() -> [UUID: Int] {
         var counts: [UUID: Int] = [:]
         for workout in workouts where workout.endedAt != nil {
-            for entry in workout.entries {
-                if let id = entry.equipmentID { counts[id, default: 0] += 1 }
+            for id in Set(workout.entries.compactMap(\.equipmentID)) {
+                counts[id, default: 0] += 1
             }
         }
         return counts

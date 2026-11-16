@@ -70,6 +70,19 @@ struct SummaryView: View {
                 }
                 .card()
 
+                if Store.canReopen(workout) {
+                    Button {
+                        keepGoing()
+                    } label: {
+                        Label("Keep going: add exercises or sets", systemImage: "plus")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.line, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("keepGoing")
+                }
+
                 if !isFresh {
                     Button("Delete this workout", role: .destructive) { confirmDelete = true }
                         .font(.system(size: 15, weight: .semibold))
@@ -113,6 +126,21 @@ struct SummaryView: View {
                 }
             }
             Button("Keep it", role: .cancel) {}
+        }
+    }
+
+    private func keepGoing() {
+        if isFresh {
+            // Still inside the workout screen: it switches back to logging by itself.
+            Store.reopen(workout, context: context)
+        } else {
+            // Opened from the calendar: close this sheet first, then the workout screen opens.
+            onDone()
+            let store = context
+            let reopened = workout
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                Store.reopen(reopened, context: store)
+            }
         }
     }
 

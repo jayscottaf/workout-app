@@ -151,6 +151,17 @@ enum Store {
         return true
     }
 
+    /// Workouts started today can be reopened after Finish to add exercises or sets.
+    static func canReopen(_ workout: Workout, now: Date = Date()) -> Bool {
+        workout.endedAt != nil && Calendar.current.isDate(workout.startedAt, inSameDayAs: now)
+    }
+
+    /// Put a finished workout back in progress. Finishing again saves it (and replaces its Health entry).
+    static func reopen(_ workout: Workout, context: ModelContext) {
+        workout.endedAt = nil
+        try? context.save()
+    }
+
     // MARK: plain-language summary
 
     /// "You beat last time on 11 of 18 sets. Lat pulldown moves up to 125 lb next time..."

@@ -72,8 +72,10 @@ final class HealthService: ObservableObject {
     }
 
     /// Save a finished lifting session to Apple Health as a strength training workout.
+    /// A session this app already saved with the same start time (finished, then reopened) is replaced.
     func saveLifting(start: Date, end: Date) async -> Bool {
         guard connected, isAvailable, end > start else { return false }
+        await removeSavedLifting(startingAt: start)
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .traditionalStrengthTraining
         let builder = HKWorkoutBuilder(healthStore: store, configuration: configuration, device: .local())
@@ -86,6 +88,18 @@ final class HealthService: ObservableObject {
             lastError = error.localizedDescription
             return false
         }
+    }
+
+    private func removeSavedLifting(startingAt start: Date) async {
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            HKQuery.predicateForWorkouts(with: .traditionalStrengthTraining),
+            HKQuery.predicateForObjects(from: HKSource.default()),
+            HKQuery.predicateForSamples(withStart: start.addingTimeInterval(-1), end: start.addingTimeInterval(1),
+                                        options: .strictStartDate),
+        ])
+        guard let earlier = try? await run(type: HKObjectType.workoutType(), predicate: predicate, limit: 10),
+              !earlier.isEmpty else { return }
+        try? await store.delete(earlier)
     }
 
     // MARK: queries

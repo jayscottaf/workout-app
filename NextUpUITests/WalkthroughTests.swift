@@ -47,6 +47,15 @@ final class WalkthroughTests: XCTestCase {
         XCTAssertTrue(app.buttons["summaryDone"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["WHAT IT MEANS"].exists)
         shot("05-summary")
+
+        // Keep going after Finish: the workout reopens to add more, then finishes again.
+        let keepGoing = app.buttons["keepGoing"]
+        if !keepGoing.isHittable { app.swipeUp() }
+        keepGoing.tap()
+        XCTAssertTrue(app.buttons["finishWorkout"].waitForExistence(timeout: 10))
+        shot("05b-reopened")
+        app.buttons["finishWorkout"].tap()
+        XCTAssertTrue(app.buttons["summaryDone"].waitForExistence(timeout: 10))
         app.buttons["summaryDone"].tap()
 
         // Today now offers the following day and counts the workout toward the week.

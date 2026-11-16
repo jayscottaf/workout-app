@@ -2,6 +2,28 @@ import Foundation
 import UIKit
 import UserNotifications
 
+/// The rest length chosen in Settings. 0 means automatic (each exercise's own rest).
+enum RestSetting {
+    static let key = "restSeconds"
+    static let choices = [0, 30, 45, 60, 75, 90, 105, 120, 150, 180, 240, 300]
+
+    static var current: Int { UserDefaults.standard.integer(forKey: key) }
+
+    /// The countdown to use after a set, given the exercise's own rest.
+    static func seconds(default exerciseRest: Int) -> Int {
+        current > 0 ? current : exerciseRest
+    }
+
+    static func step(_ value: Int, by offset: Int) -> Int {
+        let index = choices.firstIndex(of: value) ?? 0
+        return choices[min(max(index + offset, 0), choices.count - 1)]
+    }
+
+    static func label(_ seconds: Int) -> String {
+        seconds == 0 ? "Automatic" : String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
 /// The automatic rest countdown that starts when a set is logged.
 @MainActor
 final class RestTimer: ObservableObject {

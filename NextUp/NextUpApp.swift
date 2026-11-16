@@ -58,6 +58,10 @@ struct RootView: View {
             didResume = true
             session = workouts.first { $0.endedAt == nil }
         }
+        .onChange(of: workouts.first { $0.endedAt == nil }?.id) { _, id in
+            // A finished workout reopened from the calendar: bring up its workout screen.
+            if session == nil, let id { session = workouts.first { $0.id == id } }
+        }
         .task { await health.refresh() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await health.refresh() } }

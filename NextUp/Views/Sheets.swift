@@ -167,6 +167,7 @@ struct SettingsView: View {
     @Query private var prefs: [ExercisePrefs]
     @AppStorage("weeklyGoal") private var weeklyGoal = 3
     @AppStorage("absEveryDays") private var absEveryDays = 3
+    @AppStorage(RestSetting.key) private var restSeconds = 0
 
     var body: some View {
         NavigationStack {
@@ -178,6 +179,23 @@ struct SettingsView: View {
                     Text("Routine")
                 } footer: {
                     Text("Your streak counts weeks where you reach the weekly goal, not individual days.")
+                }
+
+                Section {
+                    Stepper {
+                        Text("Rest between sets: \(RestSetting.label(restSeconds))")
+                    } onIncrement: {
+                        restSeconds = RestSetting.step(restSeconds, by: 1)
+                    } onDecrement: {
+                        restSeconds = RestSetting.step(restSeconds, by: -1)
+                    }
+                    .accessibilityIdentifier("restSetting")
+                } header: {
+                    Text("Rest timer")
+                } footer: {
+                    Text(restSeconds == 0
+                         ? "Automatic: 2:00 after big lifts like presses and squats, 1:15 after smaller ones, 1:00 in the 20 minute version."
+                         : "Every rest countdown starts at \(RestSetting.label(restSeconds)). You can still add 15 seconds or skip during a workout.")
                 }
 
                 Section {

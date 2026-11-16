@@ -73,6 +73,10 @@ struct LoggingView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
+        .onAppear {
+            // Reopened after Finish: start on the first exercise with sets left, else the last one.
+            index = entries.firstIndex { !$0.isDone } ?? max(entries.count - 1, 0)
+        }
         .animation(.spring(duration: 0.35), value: banner)
         .animation(.easeOut(duration: 0.2), value: rest.isRunning)
         .sheet(item: $swapping) { entry in
@@ -392,7 +396,7 @@ struct LoggingView: View {
         if everythingDone {
             rest.stop()
         } else {
-            rest.start(seconds: entry.restSeconds)
+            rest.start(seconds: RestSetting.seconds(default: entry.restSeconds))
         }
     }
 
@@ -422,6 +426,7 @@ struct LoggingView: View {
         let start = workout.startedAt
         let end = workout.endedAt ?? Date()
         Task { @MainActor in
+            // If this workout was finished before and reopened, its earlier Health entry is replaced.
             if await health.saveLifting(start: start, end: end) {
                 workout.savedToHealth = true
                 try? context.save()

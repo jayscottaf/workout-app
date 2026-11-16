@@ -42,6 +42,8 @@ struct WatchEntry: Codable, Equatable, Identifiable {
     var restSeconds: Int
     var increment: Double
     var isBodyweight: Bool
+    /// The bar weight when this exercise is loaded with plates (0 for a plate-loaded machine), else nil.
+    var bar: Double? = nil
     var sets: [WatchSet]
 
     var nextSet: WatchSet? { sets.first { !$0.done } }

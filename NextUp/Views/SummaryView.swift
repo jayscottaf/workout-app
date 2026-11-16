@@ -12,6 +12,7 @@ struct SummaryView: View {
     @AppStorage("weeklyGoal") private var weeklyGoal = 3
     @State private var confirmDelete = false
     @State private var appeared = false
+    @State private var editing = false
 
     var body: some View {
         let records = workout.prSets
@@ -57,7 +58,18 @@ struct SummaryView: View {
                 if isFresh { weekCard(status) }
 
                 VStack(alignment: .leading, spacing: 12) {
-                    CapsLabel("What you did")
+                    HStack {
+                        CapsLabel("What you did")
+                        Spacer()
+                        Button("Edit") { editing = true }
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Theme.volt)
+                            .frame(minWidth: 44, minHeight: 32, alignment: .trailing)
+                            .contentShape(Rectangle())
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Edit this workout")
+                            .accessibilityIdentifier("editWorkout")
+                    }
                     ForEach(workout.sortedEntries) { entry in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(entry.name).font(.system(size: 15, weight: .bold))
@@ -114,6 +126,7 @@ struct SummaryView: View {
             withAnimation(.spring(duration: 0.6, bounce: 0.4).delay(0.15)) { appeared = true }
             if !records.isEmpty { Haptics.success() }
         }
+        .sheet(isPresented: $editing) { EditWorkoutSheet(workout: workout) }
         .confirmationDialog("Delete this workout? Its sets will no longer count toward suggestions or records.",
                             isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete workout", role: .destructive) {

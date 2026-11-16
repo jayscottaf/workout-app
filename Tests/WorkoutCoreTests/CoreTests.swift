@@ -326,3 +326,92 @@ final class StatsTests: XCTestCase {
         XCTAssertTrue(recap.lines.contains("Cardio: 2 sessions, 5.5 miles."))
     }
 }
+
+final class PlatesTests: XCTestCase {
+
+    func testCommonBarbellWeights() {
+        XCTAssertEqual(Plates.text(total: 135), "Each side: 45")
+        XCTAssertEqual(Plates.text(total: 160), "Each side: 45 + 10 + 2.5")
+        XCTAssertEqual(Plates.text(total: 225), "Each side: 2 × 45")
+        XCTAssertEqual(Plates.text(total: 185), "Each side: 45 + 25")
+        XCTAssertEqual(Plates.text(total: 45), "Just the bar")
+    }
+
+    func testLighterThanTheBarShowsNothing() {
+        XCTAssertNil(Plates.text(total: 40))
+        XCTAssertNil(Plates.text(total: 0))
+    }
+
+    func testWeightThePlatesCannotMakeSaysWhatIsMissing() {
+        XCTAssertEqual(Plates.load(total: 137.5), Plates.Load(perSide: [45], leftover: 1.25))
+        XCTAssertEqual(Plates.text(total: 137.5), "Each side: 45 + 1.25 more")
+    }
+
+    func testPlateLoadedMachineHasNoBar() {
+        XCTAssertEqual(Plates.text(total: 180, bar: 0), "Each side: 2 × 45")
+        XCTAssertNil(Plates.text(total: 0, bar: 0))
+        XCTAssertEqual(Plates.bar(forEquipment: "barbell"), 45)
+        XCTAssertEqual(Plates.bar(forEquipment: "legPress"), 0)
+        XCTAssertNil(Plates.bar(forEquipment: "dumbbells"))
+    }
+
+    func testLoadAlwaysAddsUp() {
+        for total in stride(from: 45.0, through: 500, by: 2.5) {
+            let load = Plates.load(total: total)!
+            XCTAssertEqual(45 + 2 * (load.perSide.reduce(0, +) + load.leftover), total, accuracy: 0.001)
+            XCTAssertLessThan(load.leftover, 2.5)
+        }
+    }
+
+    func testWarmUpsClimbTowardTheWorkingWeight() {
+        XCTAssertEqual(WarmUp.sets(target: 135, step: 5, bar: 45),
+                       [WarmUpSet(weight: 70, reps: 8), WarmUpSet(weight: 95, reps: 5), WarmUpSet(weight: 115, reps: 3)])
+        XCTAssertEqual(WarmUp.sets(target: 225, step: 5, bar: 45).map(\.weight), [115, 160, 190])
+    }
+
+    func testWarmUpsNeverReachTheWorkingWeightOrGoBelowTheBar() {
+        for target in stride(from: 5.0, through: 400, by: 5) {
+            let sets = WarmUp.sets(target: target, step: 5, bar: 45)
+            XCTAssertEqual(sets.map(\.weight), sets.map(\.weight).sorted())
+            XCTAssertEqual(Set(sets.map(\.weight)).count, sets.count)
+            for set in sets {
+                XCTAssertLessThan(set.weight, target)
+                XCTAssertGreaterThanOrEqual(set.weight, 45)
+            }
+        }
+    }
+
+    func testLightWeightsNeedNoWarmUp() {
+        XCTAssertTrue(WarmUp.sets(target: 15, step: 5).isEmpty)
+        XCTAssertTrue(WarmUp.sets(target: 55, step: 5, bar: 45).isEmpty)
+        XCTAssertTrue(WarmUp.sets(target: 0, step: 5).isEmpty)
+    }
+}
+
+final class RecordRecountTests: XCTestCase {
+
+    private func input(_ key: String, _ sets: [(Double, Int)]) -> Stats.RecordInput {
+        Stats.RecordInput(historyKey: key, sets: sets.map { SetRecord(weight: $0.0, reps: $0.1) })
+    }
+
+    func testFirstWorkoutNeverHasRecords() {
+        let kinds = Stats.recordKinds([[input("bench", [(100, 8), (105, 8)])]])
+        XCTAssertEqual(kinds, [[[nil, nil]]])
+    }
+
+    func testLaterWorkoutsAreComparedWithEarlierOnes() {
+        let kinds = Stats.recordKinds([
+            [input("bench", [(100, 8), (100, 8)])],
+            [input("bench", [(105, 8), (105, 8)]), input("curl", [(30, 10)])],
+        ])
+        XCTAssertEqual(kinds[1][0], [.weight, nil])
+        XCTAssertEqual(kinds[1][1], [nil])
+    }
+
+    func testLoweringAnOldSetCanCreateALaterRecord() {
+        let before = Stats.recordKinds([[input("bench", [(120, 8)])], [input("bench", [(110, 8)])]])
+        let after = Stats.recordKinds([[input("bench", [(100, 8)])], [input("bench", [(110, 8)])]])
+        XCTAssertEqual(before[1][0], [nil])
+        XCTAssertEqual(after[1][0], [.weight])
+    }
+}

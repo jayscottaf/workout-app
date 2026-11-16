@@ -78,7 +78,7 @@ enum Demo {
 
     private static func makeWorkout() -> WatchWorkout {
         let plan: [(String, Double, Int, Int, Bool)] = [
-            ("Bench press", 30, 9, 120, false),
+            ("Bench press", 160, 9, 120, false),
             ("Incline dumbbell press", 25, 10, 120, false),
             ("Cable fly", 20, 12, 75, false),
             ("Triceps pushdown", 40, 11, 75, false),
@@ -87,6 +87,7 @@ enum Demo {
         ]
         let entries = plan.map { name, weight, reps, rest, body in
             WatchEntry(id: UUID(), name: name, restSeconds: rest, increment: 5, isBodyweight: body,
+                       bar: name == "Bench press" ? Plates.barWeight : nil,
                        sets: (0..<3).map { index in
                            WatchSet(id: UUID(), index: index, weight: weight, reps: reps,
                                     lastWeight: weight > 0 ? weight - 5 : 0, lastReps: reps + 1, done: false)

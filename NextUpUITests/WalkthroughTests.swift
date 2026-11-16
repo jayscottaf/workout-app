@@ -22,6 +22,7 @@ final class WalkthroughTests: XCTestCase {
         // Start the workout: first set is pre-filled and ready to confirm.
         app.buttons["startWorkout"].tap()
         XCTAssertTrue(app.buttons["logSet"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["WARM-UP FIRST"].exists)
         shot("02-logging")
 
         // One-tap swap to an equivalent exercise.
@@ -47,6 +48,19 @@ final class WalkthroughTests: XCTestCase {
         XCTAssertTrue(app.buttons["summaryDone"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["WHAT IT MEANS"].exists)
         shot("05-summary")
+
+        // Fix a set after the fact: the summary updates.
+        let edit = app.buttons["editWorkout"]
+        if !edit.isHittable { app.swipeUp() }
+        edit.tap()
+        let firstSet = app.buttons.matching(identifier: "editSetRow").firstMatch
+        XCTAssertTrue(firstSet.waitForExistence(timeout: 5))
+        firstSet.tap()
+        app.buttons["One more rep"].tap()
+        shot("05a-edit")
+        app.buttons["editSetOK"].tap()
+        app.buttons["editDone"].tap()
+        XCTAssertTrue(app.buttons["summaryDone"].waitForExistence(timeout: 5))
 
         // Keep going after Finish: the workout reopens to add more, then finishes again.
         let keepGoing = app.buttons["keepGoing"]

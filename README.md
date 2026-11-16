@@ -19,6 +19,9 @@ Arguments → add `-demoData`.
 | Rotation | Offers the day after the one you did last, however long ago. You can pick a different day. |
 | Abs | Add-on offered every few days (default 3, change in Settings). |
 | Fast logging | Sets pre-filled with today's target, one tap to confirm, +/- for weight and reps, rest timer starts by itself. |
+| Plates and warm-ups | Barbell and plate-loaded exercises show what to put on each side (45 lb bar, standard plates), on the phone and the Watch. The phone also suggests lighter warm-up sets before the first set; they are not logged. |
+| Rest on the Lock Screen | The rest countdown shows on the Lock Screen and in the Dynamic Island (a Live Activity), so you can see it without opening the app. |
+| Fix a past workout | Open a workout from the calendar or the summary, tap Edit, and change or remove a set. Personal records are worked out again afterwards. |
 | Beat last time | Every set shows what you did last time and the number that beats it. |
 | Gyms | Each gym has its own equipment list. Machines keep a separate history per machine; dumbbells, barbells and body weight share one history everywhere. |
 | Swap | One tap to an equivalent exercise that the current gym can do. The choice is remembered for that gym. |
@@ -69,7 +72,8 @@ NextUp/Services/    Saving and loading, Apple Health, rest timer, Apple Watch co
 NextUp/Views/       The screens.
 NextUp/Design/      Colours, fonts, shared pieces.
 NextUpWatch/        The Apple Watch app: screens, connection to the phone, heart-rate recording.
-Shared/             The data the phone and the Watch send each other.
+NextUpRestActivity/ The small extension that draws the rest countdown on the Lock Screen.
+Shared/             The data the phone and the Watch send each other, plus the plate and warm-up maths.
 NextUpUITests/      Drives the app in the simulator through the main flow and screenshots each step.
 Tests/              Unit tests for the rules.
 ```

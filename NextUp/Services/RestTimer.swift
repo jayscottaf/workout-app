@@ -35,6 +35,16 @@ final class RestTimer: ObservableObject {
     private let notificationID = "rest-timer"
     /// UI tests and screenshots skip the notification permission prompt.
     private let notificationsEnabled = !ProcessInfo.processInfo.arguments.contains("-demoData")
+    /// The Lock Screen countdown. Off for UI tests and screenshots unless `-restActivity` asks for it.
+    private let liveActivityEnabled = !ProcessInfo.processInfo.arguments.contains("-demoData")
+        || ProcessInfo.processInfo.arguments.contains("-restActivity")
+    private var title = ""
+    private var next = ""
+
+    init() {
+        // A countdown left on the Lock Screen by an earlier run of the app is out of date.
+        RestLiveActivity.end()
+    }
 
     var isRunning: Bool { endDate != nil }
     var progress: Double { total > 0 ? min(1, max(0, 1 - remaining / total)) : 0 }
@@ -44,13 +54,17 @@ final class RestTimer: ObservableObject {
         return String(format: "%d:%02d", seconds / 60, seconds % 60)
     }
 
-    func start(seconds: Int) {
+    /// `title` is the workout's name and `next` says what comes after the rest; both are shown on the Lock Screen.
+    func start(seconds: Int, title: String = "", next: String = "") {
         guard seconds > 0 else { return }
         total = TimeInterval(seconds)
         remaining = total
         endDate = Date().addingTimeInterval(total)
+        self.title = title
+        self.next = next
         startTicking()
         scheduleNotification()
+        showLiveActivity()
     }
 
     func add(seconds: Int) {
@@ -59,6 +73,7 @@ final class RestTimer: ObservableObject {
         total += TimeInterval(seconds)
         tick()
         scheduleNotification()
+        showLiveActivity()
     }
 
     func stop() {
@@ -66,6 +81,7 @@ final class RestTimer: ObservableObject {
         timer = nil
         endDate = nil
         remaining = 0
+        if liveActivityEnabled { RestLiveActivity.end() }
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [notificationID])
     }
 
@@ -83,6 +99,11 @@ final class RestTimer: ObservableObject {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             stop()
         }
+    }
+
+    private func showLiveActivity() {
+        guard liveActivityEnabled, let endDate else { return }
+        RestLiveActivity.show(start: endDate.addingTimeInterval(-total), end: endDate, title: title, next: next)
     }
 
     /// So the phone still buzzes if the app is in the background when rest ends.

@@ -93,7 +93,7 @@ final class WatchLink: NSObject, ObservableObject {
                 trackHealth: !active.savedToHealth,
                 entries: active.sortedEntries.map { entry in
                     WatchEntry(id: entry.id, name: entry.name, restSeconds: entry.restSeconds,
-                               increment: entry.increment, isBodyweight: entry.isBodyweight,
+                               increment: entry.increment, isBodyweight: entry.isBodyweight, bar: entry.plateBar,
                                sets: entry.sortedSets.map { set in
                                    WatchSet(id: set.id, index: set.index, weight: set.weight, reps: set.reps,
                                             lastWeight: set.lastWeight, lastReps: set.lastReps,

@@ -147,7 +147,9 @@ struct LogPage: View {
     }
 
     private func logging(_ entry: WatchEntry, _ set: WatchSet) -> some View {
-        VStack(spacing: 5) {
+        // The plates line needs room: everything else sits a little tighter when it shows.
+        let plates = entry.bar.flatMap { Plates.text(total: weight, bar: $0) }
+        return VStack(spacing: plates == nil ? 5 : 2) {
             Button { showList = true } label: {
                 HStack(spacing: 4) {
                     Caps("Set \(set.index + 1) of \(entry.sets.count)")
@@ -181,7 +183,7 @@ struct LogPage: View {
                     .accessibilityLabel("\(Int(reps)) reps")
                     .accessibilityHint("Turn the crown to change the reps")
             }
-            .frame(height: 58)
+            .frame(height: plates == nil ? 58 : 52)
 
             Text(lastText(set))
                 .font(.system(size: 12))
@@ -189,6 +191,16 @@ struct LogPage: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .layoutPriority(1)
+
+            if let plates {
+                Text(plates)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Look.volt)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .layoutPriority(1)
+                    .accessibilityIdentifier("platesLine")
+            }
 
             Spacer(minLength: 0)
 
@@ -202,7 +214,7 @@ struct LogPage: View {
                     Text("Log set")
                 }
             }
-            .buttonStyle(PillStyle())
+            .buttonStyle(PillStyle(height: plates == nil ? 40 : 37))
             .doubleTapToPress()
             .accessibilityIdentifier("logSet")
         }

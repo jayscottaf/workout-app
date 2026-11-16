@@ -35,6 +35,36 @@ enum Stats {
         return nil
     }
 
+    /// One exercise inside one workout, for `recordKinds`.
+    struct RecordInput {
+        var historyKey: String
+        var sets: [SetRecord]
+    }
+
+    /// Work out again which sets were personal records, after a past workout was edited.
+    /// `workouts` is oldest first. The result has the same shape: one value per set.
+    /// Each set is compared with every earlier workout plus the earlier sets of its own exercise.
+    static func recordKinds(_ workouts: [[RecordInput]]) -> [[[PRKind?]]] {
+        var past: [String: [SetRecord]] = [:]
+        var result: [[[PRKind?]]] = []
+        for workout in workouts {
+            var kinds: [[PRKind?]] = []
+            for entry in workout {
+                let before = past[entry.historyKey] ?? []
+                var earlier: [SetRecord] = []
+                var entryKinds: [PRKind?] = []
+                for set in entry.sets {
+                    entryKinds.append(before.isEmpty ? nil : detectPR(weight: set.weight, reps: set.reps, prior: before + earlier))
+                    earlier.append(set)
+                }
+                kinds.append(entryKinds)
+            }
+            for entry in workout { past[entry.historyKey, default: []] += entry.sets }
+            result.append(kinds)
+        }
+        return result
+    }
+
     /// Best estimated strength per session, oldest first (for the chart).
     static func strengthSeries(_ sessions: [Session]) -> [(date: Date, value: Double)] {
         sessions.reversed().compactMap { session in

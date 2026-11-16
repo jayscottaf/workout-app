@@ -198,6 +198,10 @@ struct LoggingView: View {
             }
             .card(padding: 12, radius: 16, color: Theme.voltDim)
 
+            if let first = entry.nextSet, entry.completedSets.isEmpty, position == 0 || entry.plateBar != nil {
+                warmUpCard(target: first.weight, entry: entry)
+            }
+
             VStack(spacing: 8) {
                 ForEach(entry.sortedSets) { set in
                     if set.completedAt != nil {
@@ -332,6 +336,25 @@ struct LoggingView: View {
                         less: { set.reps = max(1, set.reps - 1) },
                         more: { set.reps += 1 })
             }
+            if let bar = entry.plateBar, let plates = Plates.text(total: set.weight, bar: bar) {
+                HStack(spacing: 6) {
+                    Image(systemName: "circle.circle.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Theme.volt)
+                        .accessibilityHidden(true)
+                    Text(plates)
+                        .font(.system(size: 14, weight: .semibold))
+                        .monospacedDigit()
+                    if bar > 0 {
+                        Text("· \(Fmt.weight(bar)) lb bar")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.muted)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("platesLine")
+            }
             Button {
                 log(set, entry: entry, history: history)
             } label: {
@@ -346,6 +369,42 @@ struct LoggingView: View {
         .padding(16)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Theme.volt, lineWidth: 2))
+    }
+
+    /// Lighter sets to do first. They are a guide only and are not logged.
+    @ViewBuilder
+    private func warmUpCard(target: Double, entry: ExerciseEntry) -> some View {
+        let bar = entry.plateBar
+        let sets = WarmUp.sets(target: target, step: entry.increment, bar: bar ?? 0)
+        if !sets.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    CapsLabel("Warm-up first")
+                    Spacer()
+                    Text("not logged")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.muted)
+                }
+                ForEach(Array(sets.enumerated()), id: \.offset) { _, set in
+                    HStack(spacing: 10) {
+                        Text("\(Fmt.weight(set.weight)) lb × \(set.reps)")
+                            .font(.system(size: 15, weight: .bold))
+                            .monospacedDigit()
+                        if let bar, let plates = Plates.text(total: set.weight, bar: bar) {
+                            Text(plates)
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.muted)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .card(padding: 14, radius: 18)
+            .accessibilityIdentifier("warmUpCard")
+        }
     }
 
     private func stepper(value: String, unit: String, lessLabel: String, moreLabel: String,
@@ -396,8 +455,18 @@ struct LoggingView: View {
         if everythingDone {
             rest.stop()
         } else {
-            rest.start(seconds: RestSetting.seconds(default: entry.restSeconds))
+            rest.start(seconds: RestSetting.seconds(default: entry.restSeconds), title: workout.title,
+                       next: nextUpText(after: entry))
         }
+    }
+
+    /// "Next: Bench press · 135 lb × 8", for the rest countdown on the Lock Screen.
+    private func nextUpText(after entry: ExerciseEntry) -> String {
+        let upcoming = entry.nextSet.map { (entry, $0) }
+            ?? workout.sortedEntries.first { !$0.isDone }.flatMap { other in other.nextSet.map { (other, $0) } }
+        guard let (nextEntry, set) = upcoming else { return "" }
+        let amount = set.weight > 0 ? "\(Fmt.weight(set.weight)) lb × \(set.reps)" : "\(set.reps) reps"
+        return "Next: \(nextEntry.name) · \(amount)"
     }
 
     private var finishTitle: String {

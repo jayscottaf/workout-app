@@ -111,6 +111,8 @@ final class ExerciseEntry {
     var name: String { exercise?.name ?? exerciseID }
     var range: ClosedRange<Int> { repLow...max(repLow, repHigh) }
     var isBodyweight: Bool { exercise?.isBodyweight ?? false }
+    /// The bar weight when this exercise is loaded with plates (0 for a plate-loaded machine), else nil.
+    var plateBar: Double? { exercise.flatMap { Plates.bar(forEquipment: $0.equipment) } }
     var sortedSets: [SetEntry] { sets.sorted { $0.index < $1.index } }
     var completedSets: [SetEntry] { sortedSets.filter { $0.completedAt != nil } }
     var nextSet: SetEntry? { sortedSets.first { $0.completedAt == nil } }

@@ -162,6 +162,44 @@ enum Store {
         try? context.save()
     }
 
+    // MARK: fixing a past workout
+
+    /// Remove one logged set. An exercise left with no sets goes too.
+    static func remove(_ set: SetEntry, from entry: ExerciseEntry, context: ModelContext) {
+        entry.sets.removeAll { $0.id == set.id }
+        context.delete(set)
+        if entry.sets.isEmpty {
+            entry.workout?.entries.removeAll { $0.id == entry.id }
+            context.delete(entry)
+        } else {
+            for (index, remaining) in entry.sortedSets.enumerated() { remaining.index = index }
+        }
+        try? context.save()
+    }
+
+    /// Work out again which sets are personal records, across every finished workout.
+    /// Called after a past workout was edited, because that can change records in later ones.
+    static func recountRecords(context: ModelContext) {
+        let all = (try? context.fetch(FetchDescriptor<Workout>(sortBy: [SortDescriptor(\.startedAt)]))) ?? []
+        let done = finished(all)
+        let entries = done.map(\.sortedEntries)
+        let kinds = Stats.recordKinds(entries.map { list in
+            list.map { entry in
+                Stats.RecordInput(historyKey: entry.historyKey,
+                                  sets: entry.completedSets.map { SetRecord(weight: $0.weight, reps: $0.reps) })
+            }
+        })
+        for (w, list) in entries.enumerated() {
+            for (e, entry) in list.enumerated() {
+                for (s, set) in entry.completedSets.enumerated() {
+                    let raw = kinds[w][e][s]?.rawValue
+                    if set.prKindRaw != raw { set.prKindRaw = raw }
+                }
+            }
+        }
+        try? context.save()
+    }
+
     // MARK: plain-language summary
 
     /// "You beat last time on 11 of 18 sets. Lat pulldown moves up to 125 lb next time..."

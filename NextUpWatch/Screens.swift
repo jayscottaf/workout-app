@@ -181,13 +181,14 @@ struct LogPage: View {
                     .accessibilityLabel("\(Int(reps)) reps")
                     .accessibilityHint("Turn the crown to change the reps")
             }
-            .frame(height: 64)
+            .frame(height: 58)
 
             Text(lastText(set))
-                .font(.system(size: 11))
+                .font(.system(size: 12))
                 .foregroundStyle(Look.muted)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.8)
+                .layoutPriority(1)
 
             Spacer(minLength: 0)
 

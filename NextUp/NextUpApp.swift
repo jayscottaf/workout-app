@@ -4,7 +4,7 @@ import SwiftData
 @main
 struct NextUpApp: App {
     private let container: ModelContainer
-    @StateObject private var health = HealthService()
+    @StateObject private var health: HealthService
     @StateObject private var rest = RestTimer()
 
     init() {
@@ -19,6 +19,10 @@ struct NextUpApp: App {
             fatalError("Could not open the workout database: \(error)")
         }
         Store.seedIfNeeded(ModelContext(container), demo: demo)
+        let health = HealthService()
+        _health = StateObject(wrappedValue: health)
+        // Apple Watch: also runs when the Watch wakes the app in the background.
+        WatchLink.shared.activate(container: container, health: health)
     }
 
     var body: some Scene {
@@ -62,9 +66,26 @@ struct RootView: View {
             // A finished workout reopened from the calendar: bring up its workout screen.
             if session == nil, let id { session = workouts.first { $0.id == id } }
         }
+        .onReceive(WatchLink.shared.$closeWorkoutID) { id in
+            // The Watch discarded the workout on screen: close it before it is deleted.
+            if let id, session?.id == id { session = nil }
+        }
+        .onChange(of: watchSignature, initial: true) { _, _ in WatchLink.shared.push() }
         .task { await health.refresh() }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await health.refresh() } }
+            if phase == .active {
+                Task { await health.refresh() }
+                WatchLink.shared.push()
+            }
         }
+    }
+
+    /// Changes whenever something the Watch shows has changed.
+    private var watchSignature: String {
+        guard let latest = workouts.first else { return "none" }
+        let sets = latest.entries.flatMap(\.sets)
+        let weights = sets.reduce(0) { $0 + $1.weight + Double($1.reps) }
+        return "\(workouts.count)-\(latest.id)-\(latest.endedAt?.timeIntervalSince1970 ?? 0)-\(latest.entries.count)"
+            + "-\(sets.count)-\(latest.completedSets.count)-\(weights)-\(RestSetting.current)"
     }
 }

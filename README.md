@@ -27,6 +27,23 @@ Arguments → add `-demoData`.
 | Apple Health | Reads runs, walks and body weight. Saves each lifting session as a strength workout. |
 | Streak | Counts weeks where you hit your weekly goal (default 3), not days. |
 
+## Apple Watch
+
+The Watch app (`NextUpWatch`, watchOS 10+) is installed with the iPhone app. The phone keeps all the data; the Watch
+shows today's workout and sends back what you do on it.
+
+- **Today:** the workout that is next, with Start and the 20 minute version.
+- **Log a set:** tap weight or reps, turn the crown to change it, tap Log set (or double tap your fingers on newer Watches).
+- **Rest:** a countdown ring that taps your wrist when rest is over.
+- **Live:** swipe left for elapsed time, heart rate and calories, plus Swap and Finish.
+- **Summary:** sets, records, calories and average heart rate.
+
+A workout started on either device shows on both. The Watch records heart rate and calories and saves the workout to
+Apple Health; when it does, the phone does not save a second copy. Sets logged while the phone is out of reach are
+delivered when it is back in range. Starting a workout and swapping an exercise need the phone nearby.
+
+To try the Watch screens with sample data and no phone, run the `NextUpWatch` scheme with the `-demoData` argument.
+
 ## The suggestion rules, in plain language
 
 Each exercise has a rep range, for example 8 to 12.
@@ -48,9 +65,11 @@ strength so far on that same equipment. The first session never counts, because 
 ```
 NextUp/Core/        The rules: catalog, rotation, suggestions, swaps, records, streak, recap. Plain Swift, no UI.
 NextUp/Models/      What is saved on the phone (SwiftData).
-NextUp/Services/    Saving and loading, Apple Health, rest timer.
+NextUp/Services/    Saving and loading, Apple Health, rest timer, Apple Watch connection.
 NextUp/Views/       The screens.
 NextUp/Design/      Colours, fonts, shared pieces.
+NextUpWatch/        The Apple Watch app: screens, connection to the phone, heart-rate recording.
+Shared/             The data the phone and the Watch send each other.
 NextUpUITests/      Drives the app in the simulator through the main flow and screenshots each step.
 Tests/              Unit tests for the rules.
 ```

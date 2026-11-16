@@ -425,6 +425,8 @@ struct LoggingView: View {
         Haptics.success()
         let start = workout.startedAt
         let end = workout.endedAt ?? Date()
+        // When the Apple Watch recorded this workout (with heart rate), it saves it to Health itself.
+        guard !WatchLink.shared.watchSavesToHealth(workout.id) else { return }
         Task { @MainActor in
             // If this workout was finished before and reopened, its earlier Health entry is replaced.
             if await health.saveLifting(start: start, end: end) {

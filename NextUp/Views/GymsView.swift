@@ -329,3 +329,37 @@ struct EquipmentEditSheet: View {
         }
     }
 }
+
+/// Tick what this gym has, from inside a workout. Swap and Add use the new list right away.
+struct GymEquipmentSheet: View {
+    let gym: Gym
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    ForEach(EquipmentCatalog.all) { type in
+                        Toggle(isOn: Binding(
+                            get: { gym.equipment.contains { $0.typeID == type.id } },
+                            set: { Store.setHas(type, $0, gym: gym, context: context) })) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(type.name)
+                                Text(type.loading).font(.footnote).foregroundStyle(.secondary)
+                            }
+                        }
+                        .tint(Theme.volt)
+                    }
+                } footer: {
+                    Text("Changes are saved for \(gym.name). Swap and Add an exercise only offer what is ticked. Rename machines or set their weight steps under Gyms.")
+                }
+            }
+            .navigationTitle("\(gym.name) equipment")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+        }
+    }
+}

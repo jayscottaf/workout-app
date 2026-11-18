@@ -91,6 +91,13 @@ struct WorkoutScreen: View {
                 .tag(1)
         }
         .tabViewStyle(.page)
+        // Stay on the same exercise as the phone: follow it when it moves, and tell it when this Watch moves.
+        .onChange(of: workout.currentEntryID, initial: true) { _, id in
+            if let id, id != entryID, workout.entries.contains(where: { $0.id == id }) { entryID = id }
+        }
+        .onChange(of: entry?.id) { _, id in
+            if let id, id != workout.currentEntryID { model.focus(id) }
+        }
         .navigationTitle {
             Text(page == 0 ? (entry?.name ?? workout.title) : workout.title)
                 .foregroundStyle(Look.volt)
@@ -126,6 +133,8 @@ struct LogPage: View {
     @EnvironmentObject private var model: WatchModel
     @EnvironmentObject private var rest: RestClock
     @State private var weight: Double = 0
+    /// What the crown turns. The weight shown and logged is this, snapped to the exercise's step.
+    @State private var crown: Double = 0
     @State private var reps: Double = 8
     @State private var showList = false
     @FocusState private var focus: Field?
@@ -168,10 +177,11 @@ struct LogPage: View {
             .accessibilityLabel("Exercise \(position + 1) of \(workout.entries.count). Choose another exercise")
 
             HStack(spacing: 6) {
-                box(value: weight <= 0 ? "BW" : Look.weight(weight), unit: weight <= 0 ? "body" : "lb", active: focus == .weight)
+                box(value: weight <= 0 ? "BW" : Look.weight(weight),
+                    unit: weight <= 0 ? "body" : "lb · ±\(Look.weight(step(entry)))", active: focus == .weight)
                     .focusable()
                     .focused($focus, equals: .weight)
-                    .digitalCrownRotation($weight, from: 0, through: 1500, by: max(entry.increment, 0.5),
+                    .digitalCrownRotation($crown, from: 0, through: 1500, by: step(entry),
                                           sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
                     .accessibilityLabel(weight <= 0 ? "Body weight" : "\(Look.weight(weight)) pounds")
                     .accessibilityHint("Turn the crown to change the weight")
@@ -220,10 +230,29 @@ struct LogPage: View {
         }
         .onChange(of: set.id, initial: true) { _, _ in
             weight = set.weight
+            crown = set.weight
             reps = Double(set.reps)
             if focus == nil { focus = .weight }
         }
-        .onChange(of: set.weight) { _, value in weight = value }
+        .onChange(of: set.weight) { _, value in
+            weight = value
+            crown = value
+        }
+        .onChange(of: crown) { _, value in
+            // The crown can stop between steps (127.3): always show and log a real weight.
+            weight = Self.snap(value, to: step(entry))
+        }
+        .onChange(of: entry.increment) { _, _ in
+            weight = Self.snap(weight, to: step(entry))
+            crown = weight
+        }
+    }
+
+    private func step(_ entry: WatchEntry) -> Double { max(entry.increment, 0.5) }
+
+    static func snap(_ value: Double, to step: Double) -> Double {
+        guard step > 0 else { return value }
+        return max(0, (value / step).rounded() * step)
     }
 
     private func box(value: String, unit: String, active: Bool) -> some View {
@@ -284,28 +313,123 @@ struct LogPage: View {
         }
     }
 
+    private static let steps: [Double] = [2.5, 5, 10]
+
+    /// Opened from the top line: weight steps and Later for this exercise, every exercise, and Add.
     private var exerciseList: some View {
-        List(Array(workout.entries.enumerated()), id: \.element.id) { offset, item in
-            Button {
-                entryID = item.id
-                showList = false
-            } label: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(item.name).font(.system(size: 15, weight: .semibold))
-                        Text("\(item.sets.filter(\.done).count) of \(item.sets.count) sets")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Look.muted)
+        NavigationStack {
+            List {
+                if let entry, !entry.isDone {
+                    Section {
+                        if !entry.isBodyweight {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Weight steps").font(.system(size: 12)).foregroundStyle(Look.muted)
+                                HStack(spacing: 4) {
+                                    ForEach(Self.steps, id: \.self) { value in
+                                        let chosen = value == entry.increment
+                                        Button {
+                                            model.setStep(value, for: entry)
+                                        } label: {
+                                            Text(Look.weight(value))
+                                                .font(.system(size: 14, weight: .bold))
+                                                .foregroundStyle(chosen ? Look.onVolt : .white)
+                                                .frame(maxWidth: .infinity, minHeight: 32)
+                                                .background(chosen ? Look.volt : Look.surface2, in: Capsule())
+                                        }
+                                        .buttonStyle(.plain)
+                                        .accessibilityLabel("\(Look.weight(value)) pound steps\(chosen ? ", chosen" : "")")
+                                    }
+                                }
+                            }
+                            .listRowBackground(Color.clear)
+                        }
+                        if workout.entries.contains(where: { $0.id != entry.id && !$0.isDone }) {
+                            Button {
+                                model.doLater(entry)
+                                entryID = nil
+                                showList = false
+                            } label: {
+                                Label("Do this one later", systemImage: "clock.arrow.circlepath")
+                                    .font(.system(size: 15, weight: .semibold))
+                            }
+                            .accessibilityIdentifier("doLater")
+                        }
+                    } header: {
+                        Text(entry.name)
                     }
-                    Spacer()
-                    if item.isDone {
-                        Image(systemName: "checkmark").foregroundStyle(Look.volt)
-                    } else if offset == position {
-                        Circle().fill(Look.volt).frame(width: 8, height: 8)
+                }
+                Section("Exercises") {
+                    ForEach(Array(workout.entries.enumerated()), id: \.element.id) { offset, item in
+                        Button {
+                            entryID = item.id
+                            showList = false
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(item.name).font(.system(size: 15, weight: .semibold))
+                                    Text("\(item.sets.filter(\.done).count) of \(item.sets.count) sets")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(Look.muted)
+                                }
+                                Spacer()
+                                if item.isDone {
+                                    Image(systemName: "checkmark").foregroundStyle(Look.volt)
+                                } else if offset == position {
+                                    Circle().fill(Look.volt).frame(width: 8, height: 8)
+                                }
+                            }
+                        }
                     }
+                }
+                Section {
+                    NavigationLink {
+                        AddExerciseList(onAdded: { showList = false })
+                    } label: {
+                        Label("Add exercise", systemImage: "plus")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Look.volt)
+                    }
+                    .accessibilityIdentifier("addExercise")
                 }
             }
         }
+    }
+}
+
+/// Exercises the gym can do, by muscle group. The phone sends the list.
+struct AddExerciseList: View {
+    let onAdded: () -> Void
+    @EnvironmentObject private var model: WatchModel
+
+    var body: some View {
+        Group {
+            if let options = model.addOptions {
+                let groups = options.reduce(into: [String]()) { if !$0.contains($1.group) { $0.append($1.group) } }
+                if options.isEmpty {
+                    Text("Nothing else is set up for this gym.")
+                        .font(.system(size: 14)).foregroundStyle(Look.muted)
+                } else {
+                    List(groups, id: \.self) { group in
+                        NavigationLink(group) {
+                            List(options.filter { $0.group == group }) { option in
+                                Button(option.name) {
+                                    model.add(option)
+                                    onAdded()
+                                }
+                                .font(.system(size: 15, weight: .semibold))
+                            }
+                            .navigationTitle(group)
+                        }
+                    }
+                }
+            } else if let notice = model.notice {
+                Text(notice).font(.system(size: 14)).foregroundStyle(Look.orange)
+            } else {
+                ProgressView()
+            }
+        }
+        .navigationTitle("Add")
+        .onAppear { model.askForAdds() }
     }
 }
 

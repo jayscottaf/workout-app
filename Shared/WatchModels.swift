@@ -29,6 +29,8 @@ struct WatchWorkout: Codable, Equatable, Identifiable {
     var startedAt: Date
     /// false when this workout already has an Apple Health entry (it was finished, then reopened).
     var trackHealth: Bool = true
+    /// The exercise showing on the phone and the Watch, so both stay on the same one.
+    var currentEntryID: UUID? = nil
     var entries: [WatchEntry]
 
     var doneSets: [WatchSet] { entries.flatMap { $0.sets.filter(\.done) } }
@@ -76,6 +78,14 @@ struct WatchSwapOption: Codable, Equatable, Identifiable {
     var isBestMatch: Bool
 }
 
+/// An exercise the Watch can add to the workout in progress.
+struct WatchAddOption: Codable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    /// Muscle group, for example "Abs".
+    var group: String
+}
+
 /// What the Watch asks the iPhone to do.
 enum WatchCommand: Codable, Equatable {
     case refresh
@@ -88,6 +98,16 @@ enum WatchCommand: Codable, Equatable {
     case tracking(workoutID: UUID)
     /// The Watch saved this workout to Apple Health.
     case healthSaved(workoutID: UUID)
+    /// Move an exercise to the end of the workout (its machine is busy).
+    case later(entryID: UUID)
+    /// Change how far one step moves the weight for this exercise.
+    case step(entryID: UUID, increment: Double)
+    /// Ask which exercises can be added.
+    case addOptions
+    /// Add an exercise to the end of the workout.
+    case add(exerciseID: String)
+    /// The Watch moved to this exercise: show it on the phone too.
+    case focus(entryID: UUID)
 }
 
 /// Keys of the dictionaries sent over the phone-to-Watch connection.
@@ -96,6 +116,7 @@ enum WatchWire {
     static let snapshot = "snapshot"
     static let swaps = "swaps"
     static let record = "record"
+    static let adds = "adds"
 
     static func encode<T: Encodable>(_ value: T) -> Data? { try? JSONEncoder().encode(value) }
     static func decode<T: Decodable>(_ type: T.Type, from data: Any?) -> T? {
@@ -105,6 +126,19 @@ enum WatchWire {
 }
 
 extension WatchSnapshot {
+    /// Move an exercise to the end, the same way the phone does it.
+    mutating func moveToEnd(entryID: UUID) {
+        guard var workout = active, let index = workout.entries.firstIndex(where: { $0.id == entryID }) else { return }
+        workout.entries.append(workout.entries.remove(at: index))
+        active = workout
+    }
+
+    mutating func setIncrement(entryID: UUID, _ value: Double) {
+        guard var workout = active, let index = workout.entries.firstIndex(where: { $0.id == entryID }) else { return }
+        workout.entries[index].increment = value
+        active = workout
+    }
+
     /// Mark a set as logged, the same way the phone does it. Returns false if the set is not there.
     @discardableResult
     mutating func markLogged(setID: UUID, weight: Double, reps: Int) -> Bool {

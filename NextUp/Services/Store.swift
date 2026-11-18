@@ -97,6 +97,40 @@ enum Store {
         try? context.save()
     }
 
+    /// "Do it later": move an exercise to the end of the workout, for when its machine is busy.
+    static func moveToEnd(_ entry: ExerciseEntry, in workout: Workout, context: ModelContext) {
+        let others = workout.sortedEntries.filter { $0.id != entry.id }
+        for (order, other) in others.enumerated() { other.order = order }
+        entry.order = others.count
+        try? context.save()
+    }
+
+    /// Weight steps to choose from during a workout.
+    static let stepChoices: [Double] = [2.5, 5, 10]
+
+    /// Change how far one step moves the weight for this exercise. The gym's equipment remembers it for next time.
+    static func setIncrement(_ value: Double, for entry: ExerciseEntry, gym: Gym?, context: ModelContext) {
+        guard value > 0 else { return }
+        entry.increment = value
+        if let id = entry.equipmentID, let equipment = gym?.equipment.first(where: { $0.id == id }) {
+            equipment.increment = value
+        }
+        try? context.save()
+    }
+
+    /// Turn a kind of equipment on or off for a gym. Off removes every piece of that kind.
+    static func setHas(_ type: EquipmentType, _ has: Bool, gym: Gym, context: ModelContext) {
+        let current = gym.equipment.filter { $0.typeID == type.id }
+        if has, current.isEmpty {
+            let item = Equipment(typeID: type.id, name: type.name, increment: type.defaultIncrement)
+            context.insert(item)
+            item.gym = gym
+        } else if !has {
+            for item in current { context.delete(item) }
+        }
+        try? context.save()
+    }
+
     static func addSet(to entry: ExerciseEntry, context: ModelContext) {
         let last = entry.sortedSets.last
         let target = SetTarget(weight: last?.weight ?? 0, reps: last?.reps ?? entry.repLow, lastWeight: nil, lastReps: nil)

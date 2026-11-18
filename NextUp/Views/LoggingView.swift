@@ -36,6 +36,7 @@ struct LoggingView: View {
     @State private var index = 0
     @State private var swapping: ExerciseEntry?
     @State private var showAdd = false
+    @State private var showEquipment = false
     @State private var confirmFinish = false
     @State private var banner: RecordBanner?
 
@@ -75,7 +76,21 @@ struct LoggingView: View {
         }
         .onAppear {
             // Reopened after Finish: start on the first exercise with sets left, else the last one.
-            index = entries.firstIndex { !$0.isDone } ?? max(entries.count - 1, 0)
+            // Open on the exercise the Watch is showing, if any.
+            if let shared = WatchLink.shared.currentEntryID, let match = entries.firstIndex(where: { $0.id == shared }) {
+                index = match
+            } else {
+                index = entries.firstIndex { !$0.isDone } ?? max(entries.count - 1, 0)
+            }
+        }
+        // Keep the Watch on the same exercise as this screen, and follow it when it moves.
+        .onChange(of: entries.indices.contains(position) ? entries[position].id : nil, initial: true) { _, id in
+            if let id { WatchLink.shared.focus(id) }
+        }
+        .onReceive(WatchLink.shared.$currentEntryID) { id in
+            if let id, let target = workout.sortedEntries.firstIndex(where: { $0.id == id }), target != index {
+                index = target
+            }
         }
         .animation(.spring(duration: 0.35), value: banner)
         .animation(.easeOut(duration: 0.2), value: rest.isRunning)
@@ -95,6 +110,9 @@ struct LoggingView: View {
                 index = workout.entries.count - 1
                 showAdd = false
             }
+        }
+        .sheet(isPresented: $showEquipment) {
+            if let gym { GymEquipmentSheet(gym: gym) }
         }
         .confirmationDialog(finishTitle, isPresented: $confirmFinish, titleVisibility: .visible) {
             if workout.completedSets.isEmpty {
@@ -125,15 +143,20 @@ struct LoggingView: View {
                     }
                 }
                 Spacer()
-                Button { showAdd = true } label: {
+                Menu {
+                    Button { showAdd = true } label: { Label("Add an exercise", systemImage: "plus") }
+                    if gym != nil {
+                        Button { showEquipment = true } label: { Label("Gym equipment", systemImage: "dumbbell") }
+                    }
+                } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 16, weight: .heavy))
                         .foregroundStyle(Theme.volt)
                         .frame(width: 44, height: 44)
                         .background(Theme.surface, in: Circle())
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Add an exercise")
+                .accessibilityLabel("Add an exercise or change gym equipment")
+                .accessibilityIdentifier("addMenu")
             }
             HStack(spacing: 4) {
                 ForEach(Array(entries.enumerated()), id: \.element.id) { offset, entry in
@@ -173,17 +196,33 @@ struct LoggingView: View {
                     Text(subtitle(entry))
                         .font(.system(size: 14))
                         .foregroundStyle(Theme.muted)
+                    if !entry.isBodyweight { stepMenu(entry) }
                 }
                 Spacer(minLength: 0)
-                Button { swapping = entry } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.left.arrow.right")
-                        Text("Swap")
+                VStack(alignment: .trailing, spacing: 8) {
+                    Button { swapping = entry } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.left.arrow.right")
+                            Text("Swap")
+                        }
+                    }
+                    .buttonStyle(ChipButtonStyle(foreground: Theme.volt))
+                    .accessibilityLabel("Swap \(entry.name) for an equivalent exercise")
+                    .accessibilityIdentifier("swapExercise")
+                    if !entry.isDone, entries.contains(where: { $0.id != entry.id && !$0.isDone }) {
+                        Button {
+                            withAnimation { Store.moveToEnd(entry, in: workout, context: context) }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "clock.arrow.circlepath")
+                                Text("Later")
+                            }
+                        }
+                        .buttonStyle(ChipButtonStyle())
+                        .accessibilityLabel("Do \(entry.name) later. Moves it to the end of the workout")
+                        .accessibilityIdentifier("doLater")
                     }
                 }
-                .buttonStyle(ChipButtonStyle(foreground: Theme.volt))
-                .accessibilityLabel("Swap \(entry.name) for an equivalent exercise")
-                .accessibilityIdentifier("swapExercise")
             }
 
             HStack(alignment: .top, spacing: 10) {
@@ -234,9 +273,34 @@ struct LoggingView: View {
     }
 
     private func subtitle(_ entry: ExerciseEntry) -> String {
-        var parts = [entry.equipmentName, "\(entry.repLow) to \(entry.repHigh) reps"]
-        if !entry.isBodyweight { parts.append("\(Fmt.weight(entry.increment)) lb steps") }
-        return parts.joined(separator: " · ")
+        [entry.equipmentName, "\(entry.repLow) to \(entry.repHigh) reps"].joined(separator: " · ")
+    }
+
+    /// Choose how far + and − move the weight: 2.5, 5 or 10 lb.
+    private func stepMenu(_ entry: ExerciseEntry) -> some View {
+        Menu {
+            ForEach(Store.stepChoices, id: \.self) { step in
+                Button {
+                    Store.setIncrement(step, for: entry, gym: gym, context: context)
+                } label: {
+                    if step == entry.increment {
+                        Label("\(Fmt.weight(step)) lb steps", systemImage: "checkmark")
+                    } else {
+                        Text("\(Fmt.weight(step)) lb steps")
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text("\(Fmt.weight(entry.increment)) lb steps")
+                Image(systemName: "chevron.down").font(.system(size: 10, weight: .heavy))
+            }
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(Theme.volt)
+            .frame(minHeight: 30)
+        }
+        .accessibilityLabel("Weight steps: \(Fmt.weight(entry.increment)) pounds. Change")
+        .accessibilityIdentifier("stepMenu")
     }
 
     private func icon(for entry: ExerciseEntry) -> String {

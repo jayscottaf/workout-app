@@ -71,7 +71,23 @@ enum Demo {
                 snapshot.active?.entries[index].name = names[exerciseID] ?? "Swapped"
                 model.setSnapshot(snapshot)
             }
-        case .refresh, .tracking, .healthSaved:
+        case .addOptions:
+            model.addOptions = [
+                WatchAddOption(id: "crunch", name: "Crunch", group: "Abs"),
+                WatchAddOption(id: "plank", name: "Plank", group: "Abs"),
+                WatchAddOption(id: "hanging_knee_raise", name: "Hanging knee raise", group: "Abs"),
+                WatchAddOption(id: "leg_ext", name: "Leg extension", group: "Legs"),
+            ]
+        case .add(let exerciseID):
+            let names = ["crunch": "Crunch", "plank": "Plank", "hanging_knee_raise": "Hanging knee raise", "leg_ext": "Leg extension"]
+            guard var active = snapshot.active else { return }
+            active.entries.append(WatchEntry(id: UUID(), name: names[exerciseID] ?? exerciseID, restSeconds: 60,
+                                             increment: 5, isBodyweight: exerciseID != "leg_ext",
+                                             sets: (0..<3).map { WatchSet(id: UUID(), index: $0, weight: 0, reps: 15,
+                                                                         lastWeight: nil, lastReps: nil, done: false) }))
+            snapshot.active = active
+            model.setSnapshot(snapshot)
+        case .refresh, .tracking, .healthSaved, .later, .step, .focus:
             break
         }
     }

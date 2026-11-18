@@ -25,6 +25,7 @@ Arguments → add `-demoData`.
 | Beat last time | Every set shows what you did last time and the number that beats it. |
 | Gyms | Each gym has its own equipment list. Machines keep a separate history per machine; dumbbells, barbells and body weight share one history everywhere. |
 | Swap | One tap to an equivalent exercise that the current gym can do. The choice is remembered for that gym. |
+| During a workout | "Later" moves an exercise to the end when its machine is busy. Add any exercise (abs included), choose 2.5, 5 or 10 lb weight steps, and tick the gym's equipment on or off, without leaving the workout. Later, steps and Add also work on the Watch. |
 | 20-minute version | Four biggest moves of the day, two sets each, shorter rest. |
 | Progress | Personal records, estimated strength chart, weekly sets per muscle group, calendar, monthly recap. |
 | Apple Health | Reads runs, walks and body weight. Saves each lifting session as a strength workout. |

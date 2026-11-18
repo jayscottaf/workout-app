@@ -25,6 +25,18 @@ final class WalkthroughTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["WARM-UP FIRST"].exists)
         shot("02-logging")
 
+        // Finer weight steps: 2.5 lb.
+        app.buttons["stepMenu"].tap()
+        let fine = app.buttons["2.5 lb steps"]
+        XCTAssertTrue(fine.waitForExistence(timeout: 5))
+        fine.tap()
+        XCTAssertTrue(app.buttons["stepMenu"].label.contains("2.5"))
+
+        // Machine busy: do this exercise later. The next one comes up and this one moves to the end.
+        app.buttons["doLater"].tap()
+        XCTAssertTrue(app.buttons["logSet"].waitForExistence(timeout: 5))
+        shot("02a-later")
+
         // One-tap swap to an equivalent exercise.
         app.buttons["swapExercise"].tap()
         XCTAssertTrue(app.staticTexts["BEST MATCH"].waitForExistence(timeout: 5))

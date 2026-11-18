@@ -11,6 +11,8 @@ final class WatchLink: NSObject, ObservableObject {
 
     /// Set when the Watch discards a workout, so the phone can close its workout screen first.
     @Published var closeWorkoutID: UUID?
+    /// The exercise showing on both devices. Set by the phone's workout screen or by the Watch.
+    @Published private(set) var currentEntryID: UUID?
 
     private var container: ModelContainer?
     private weak var health: HealthService?
@@ -26,6 +28,13 @@ final class WatchLink: NSObject, ObservableObject {
         guard let session else { return }
         session.delegate = self
         session.activate()
+    }
+
+    /// The phone's workout screen moved to this exercise: tell the Watch.
+    func focus(_ entryID: UUID) {
+        guard currentEntryID != entryID else { return }
+        currentEntryID = entryID
+        push()
     }
 
     // MARK: Apple Health ownership
@@ -91,6 +100,7 @@ final class WatchLink: NSObject, ObservableObject {
             snapshot.active = WatchWorkout(
                 id: active.id, title: active.title, startedAt: active.startedAt,
                 trackHealth: !active.savedToHealth,
+                currentEntryID: active.entries.contains { $0.id == currentEntryID } ? currentEntryID : nil,
                 entries: active.sortedEntries.map { entry in
                     WatchEntry(id: entry.id, name: entry.name, restSeconds: entry.restSeconds,
                                increment: entry.increment, isBodyweight: entry.isBodyweight, bar: entry.plateBar,
@@ -147,6 +157,20 @@ final class WatchLink: NSObject, ObservableObject {
                     workout.savedToHealth = true
                     try? context.save()
                 }
+            case .later(let entryID):
+                if let (workout, entry) = activeEntry(where: { $0.id == entryID }) {
+                    Store.moveToEnd(entry, in: workout, context: context)
+                }
+            case .step(let entryID, let increment):
+                if let (workout, entry) = activeEntry(where: { $0.id == entryID }) {
+                    Store.setIncrement(increment, for: entry, gym: gym(for: workout), context: context)
+                }
+            case .addOptions:
+                if let data = WatchWire.encode(addOptions()) { reply[WatchWire.adds] = data }
+            case .add(let exerciseID):
+                add(exerciseID: exerciseID, context: context)
+            case .focus(let entryID):
+                currentEntryID = entryID
             }
         }
         if let snapshot = makeSnapshot(), let data = WatchWire.encode(snapshot) {
@@ -233,6 +257,26 @@ final class WatchLink: NSObject, ObservableObject {
               let exercise = ExerciseCatalog.exercise(exerciseID) else { return }
         Store.swap(entry, to: exercise, in: workout, gym: gym(for: workout), history: Store.history(fetchWorkouts()),
                    overrides: overrides(), context: context)
+    }
+
+    /// Everything this gym can do that is not already in the workout, grouped by muscle.
+    private func addOptions() -> [WatchAddOption] {
+        guard let workout = fetchWorkouts().first(where: { $0.endedAt == nil }) else { return [] }
+        let gym = gym(for: workout)?.info
+        let taken = Set(workout.entries.map(\.exerciseID))
+        return MuscleGroup.allCases.flatMap { group in
+            ExerciseCatalog.all
+                .filter { $0.muscle.group == group && !taken.contains($0.id) && Planner.isAvailable($0, gym: gym) }
+                .map { WatchAddOption(id: $0.id, name: $0.name, group: group.title) }
+        }
+    }
+
+    private func add(exerciseID: String, context: ModelContext) {
+        guard let workout = fetchWorkouts().first(where: { $0.endedAt == nil }),
+              let exercise = ExerciseCatalog.exercise(exerciseID),
+              !workout.entries.contains(where: { $0.exerciseID == exerciseID }) else { return }
+        Store.add(exercise, to: workout, gym: gym(for: workout), history: Store.history(fetchWorkouts()),
+                  overrides: overrides(), context: context)
     }
 
     private func gym(for workout: Workout) -> Gym? {

@@ -27,6 +27,7 @@ final class WatchModel: NSObject, ObservableObject {
     @Published var notice: String?
     @Published var record: String?
     @Published var swapOptions: [WatchSwapOption]?
+    @Published var addOptions: [WatchAddOption]?
 
     let rest = RestClock()
     let tracker = WorkoutTracker()
@@ -35,6 +36,9 @@ final class WatchModel: NSObject, ObservableObject {
     /// The self-test cannot answer Apple's Health permission sheet, so it runs without Health.
     private let skipsHealth = ProcessInfo.processInfo.arguments.contains("-demoData")
         || ProcessInfo.processInfo.arguments.contains("-selfTest")
+
+    /// When this Watch last moved to another exercise, so an older copy from the phone does not move it back.
+    private var focusedAt: Date?
 
     /// Sets logged here that the phone has not confirmed yet.
     private var pending: [UUID: (weight: Double, reps: Int)] = [:]
@@ -151,6 +155,45 @@ final class WatchModel: NSObject, ObservableObject {
         send(.swap(entryID: entry.id, exerciseID: option.id))
     }
 
+    /// The machine is busy: do this exercise at the end instead.
+    func doLater(_ entry: WatchEntry) {
+        guard var current = snapshot else { return }
+        current.moveToEnd(entryID: entry.id)
+        snapshot = current
+        send(.later(entryID: entry.id))
+    }
+
+    func setStep(_ value: Double, for entry: WatchEntry) {
+        guard var current = snapshot else { return }
+        current.setIncrement(entryID: entry.id, value)
+        snapshot = current
+        send(.step(entryID: entry.id, increment: value))
+    }
+
+    /// This Watch moved to another exercise: show it on the phone too.
+    func focus(_ entryID: UUID) {
+        guard var current = snapshot, current.active?.currentEntryID != entryID else { return }
+        current.active?.currentEntryID = entryID
+        snapshot = current
+        focusedAt = Date()
+        send(.focus(entryID: entryID))
+    }
+
+    func askForAdds() {
+        addOptions = nil
+        notice = nil
+        if !isDemo, session?.isReachable != true {
+            notice = "Adding needs your iPhone nearby."
+            return
+        }
+        send(.addOptions)
+    }
+
+    func add(_ option: WatchAddOption) {
+        addOptions = nil
+        send(.add(exerciseID: option.id))
+    }
+
     // MARK: talking to the phone
 
     private func send(_ command: WatchCommand) {
@@ -174,14 +217,18 @@ final class WatchModel: NSObject, ObservableObject {
     /// The phone is out of reach. Things already done are delivered later; requests are dropped.
     private func queue(_ command: WatchCommand, _ payload: [String: Any]) {
         switch command {
-        case .log, .finish, .tracking, .healthSaved, .swap:
+        case .log, .finish, .tracking, .healthSaved, .swap, .later, .step, .add:
             session?.transferUserInfo(payload)
+        case .focus:
+            break
         case .start:
             isStarting = false
             notice = "Can't reach your iPhone. Keep it nearby, then try again."
             Task { await tracker.end(at: Date(), save: false) }
         case .swapOptions:
             notice = "Swapping needs your iPhone nearby."
+        case .addOptions:
+            notice = "Adding needs your iPhone nearby."
         case .refresh:
             break
         }
@@ -190,6 +237,9 @@ final class WatchModel: NSObject, ObservableObject {
     func receive(_ message: [String: Any]) {
         if let options = WatchWire.decode([WatchSwapOption].self, from: message[WatchWire.swaps]) {
             swapOptions = options
+        }
+        if let options = WatchWire.decode([WatchAddOption].self, from: message[WatchWire.adds]) {
+            addOptions = options
         }
         if let text = message[WatchWire.record] as? String {
             showRecord(text)
@@ -223,6 +273,10 @@ final class WatchModel: NSObject, ObservableObject {
                     }
                 }
             }
+        }
+        if let focusedAt, incoming.sentAt < focusedAt, let mine = snapshot?.active?.currentEntryID,
+           next.active?.entries.contains(where: { $0.id == mine }) == true {
+            next.active?.currentEntryID = mine
         }
         snapshot = next
         if next.active != nil { isStarting = false }

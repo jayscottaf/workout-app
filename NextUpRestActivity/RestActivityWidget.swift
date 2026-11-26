@@ -20,19 +20,20 @@ private enum Look {
 struct RestActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: RestActivityAttributes.self) { context in
-            LockScreenView(state: context.state, title: context.attributes.title, isOver: context.isStale)
+            LockScreenView(state: context.state, title: context.attributes.title, isOver: context.isStale || !context.state.isResting)
                 .activityBackgroundTint(Look.bg.opacity(0.9))
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Label(context.isStale ? "Rest over" : "Rest", systemImage: "timer")
+                    Label(context.state.isResting ? (context.isStale ? "Rest over" : "Rest") : "Workout",
+                          systemImage: context.state.isResting ? "timer" : "dumbbell.fill")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(Look.volt)
                         .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Countdown(state: context.state, isOver: context.isStale)
+                    Countdown(state: context.state, isOver: context.isStale || !context.state.isResting)
                         .font(.system(size: 28, weight: .heavy, design: .rounded))
                         .frame(maxWidth: 90, alignment: .trailing)
                         .padding(.trailing, 4)
@@ -43,7 +44,7 @@ struct RestActivityWidget: Widget {
                             .font(.system(size: 14, weight: .semibold))
                             .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        if !context.isStale {
+                        if !context.isStale && context.state.isResting {
                             ProgressView(timerInterval: context.state.startDate...context.state.endDate, countsDown: true,
                                          label: { EmptyView() }, currentValueLabel: { EmptyView() })
                                 .tint(Look.volt)
@@ -52,17 +53,21 @@ struct RestActivityWidget: Widget {
                     .padding(.horizontal, 4)
                 }
             } compactLeading: {
-                Image(systemName: "timer").foregroundStyle(Look.volt)
+                Image(systemName: context.state.isResting ? "timer" : "dumbbell.fill").foregroundStyle(Look.volt)
             } compactTrailing: {
-                Countdown(state: context.state, isOver: context.isStale)
+                Countdown(state: context.state, isOver: context.isStale || !context.state.isResting)
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(Look.volt)
                     .frame(maxWidth: 44)
             } minimal: {
-                Image(systemName: "timer").foregroundStyle(Look.volt)
+                Image(systemName: context.state.isResting ? "timer" : "dumbbell.fill").foregroundStyle(Look.volt)
             }
         }
     }
+}
+
+extension RestActivityAttributes.ContentState {
+    var isResting: Bool { resting ?? true }
 }
 
 /// "1:27" counting down, or "Go" once rest is over.
@@ -90,7 +95,7 @@ private struct LockScreenView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(isOver ? "REST IS OVER" : "REST")
+                    Text(!state.isResting ? "WORKOUT" : isOver ? "REST IS OVER" : "REST")
                         .font(.system(size: 12, weight: .bold))
                         .tracking(0.8)
                         .foregroundStyle(Look.volt)

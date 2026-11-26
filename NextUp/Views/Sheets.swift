@@ -9,6 +9,7 @@ struct SwapSheet: View {
     let onPick: (ExerciseDef) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
 
     var body: some View {
         let current = entry.exercise
@@ -74,14 +75,30 @@ struct SwapSheet: View {
                 }
 
                 if !missing.isEmpty {
-                    CapsLabel("Not at this gym")
-                    VStack(alignment: .leading, spacing: 10) {
+                    CapsLabel("Not ticked at \(gym?.name ?? "this gym") yet")
+                    VStack(alignment: .leading, spacing: 4) {
                         ForEach(missing) { exercise in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(exercise.name).font(.system(size: 15, weight: .semibold))
-                                Text("Needs: \(exercise.equipmentType.name.lowercased())").font(.system(size: 13))
+                            Button {
+                                // Using it here means the gym has it: tick it and swap in one go.
+                                if let gym { Store.setHas(exercise.equipmentType, true, gym: gym, context: context) }
+                                onPick(exercise)
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(exercise.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.text)
+                                        Text("Tap to add \(exercise.equipmentType.name.lowercased()) to this gym and use it")
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(Theme.muted)
+                                            .multilineTextAlignment(.leading)
+                                    }
+                                    Spacer(minLength: 0)
+                                    Image(systemName: "plus.circle").foregroundStyle(Theme.volt)
+                                }
+                                .frame(minHeight: 48)
+                                .contentShape(Rectangle())
                             }
-                            .foregroundStyle(Theme.muted)
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("swapNew-\(exercise.id)")
                         }
                     }
                     .padding(16)
@@ -110,6 +127,8 @@ struct AddExerciseSheet: View {
     let gym: Gym?
     let excluded: Set<String>
     let onPick: (ExerciseDef) -> Void
+    @State private var creating = false
+    @Environment(\.modelContext) private var context
 
     var body: some View {
         let info = gym?.info
@@ -118,11 +137,29 @@ struct AddExerciseSheet: View {
                 Text("Add an exercise")
                     .font(Theme.rounded(26))
                     .accessibilityAddTraits(.isHeader)
-                ForEach(MuscleGroup.allCases, id: \.self) { group in
-                    let exercises = ExerciseCatalog.all.filter {
-                        $0.muscle.group == group && !excluded.contains($0.id) && Planner.isAvailable($0, gym: info)
+                Button { creating = true } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Create your own").font(.system(size: 16, weight: .semibold))
+                            Text("Not on the list? Add it once and it stays.")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.muted)
+                        }
+                        Spacer()
+                        Image(systemName: "square.and.pencil").foregroundStyle(Theme.volt)
                     }
-                    if !exercises.isEmpty {
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 56)
+                    .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("createExercise")
+                ForEach(MuscleGroup.allCases, id: \.self) { group in
+                    let all = ExerciseCatalog.all.filter { $0.muscle.group == group && !excluded.contains($0.id) }
+                    let exercises = all.filter { Planner.isAvailable($0, gym: info) }
+                    let unticked = all.filter { !Planner.isAvailable($0, gym: info) }
+                    if !all.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             CapsLabel(group.title)
                             VStack(spacing: 0) {
@@ -144,6 +181,30 @@ struct AddExerciseSheet: View {
                                     }
                                     .buttonStyle(.plain)
                                 }
+                                // Equipment not ticked at this gym yet: picking one ticks it here and adds the exercise.
+                                ForEach(unticked) { exercise in
+                                    Button {
+                                        if let gym { Store.setHas(exercise.equipmentType, true, gym: gym, context: context) }
+                                        onPick(exercise)
+                                    } label: {
+                                        HStack {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(exercise.name).font(.system(size: 16, weight: .semibold))
+                                                    .foregroundStyle(Theme.text.opacity(0.75))
+                                                Text("\(exercise.equipmentType.name) · not ticked here yet, tap to add")
+                                                    .font(.system(size: 13))
+                                                    .foregroundStyle(Theme.muted)
+                                            }
+                                            Spacer()
+                                            Image(systemName: "plus.circle").foregroundStyle(Theme.muted)
+                                        }
+                                        .padding(.horizontal, 16)
+                                        .frame(minHeight: 56)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityIdentifier("addNew-\(exercise.id)")
+                                }
                             }
                             .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                         }
@@ -156,6 +217,12 @@ struct AddExerciseSheet: View {
         .foregroundStyle(Theme.text)
         .presentationDragIndicator(.visible)
         .presentationBackground(Theme.surface)
+        .sheet(isPresented: $creating) {
+            CreateExerciseSheet(gym: gym) { exercise in
+                creating = false
+                onPick(exercise)
+            }
+        }
     }
 }
 
@@ -175,10 +242,12 @@ struct SettingsView: View {
                 Section {
                     Stepper("Weekly goal: \(weeklyGoal) workout\(weeklyGoal == 1 ? "" : "s")", value: $weeklyGoal, in: 1...7)
                     Stepper("Offer abs every \(absEveryDays) day\(absEveryDays == 1 ? "" : "s")", value: $absEveryDays, in: 1...14)
+                    NavigationLink("Days and exercises") { RoutineEditor() }
+                        .accessibilityIdentifier("routine")
                 } header: {
                     Text("Routine")
                 } footer: {
-                    Text("Your streak counts weeks where you reach the weekly goal, not individual days.")
+                    Text("Days and exercises is where you rename days, add or remove them, change what each one starts with, or switch to a ready-made routine. Your streak counts weeks where you reach the weekly goal, not individual days.")
                 }
 
                 Section {
@@ -222,10 +291,12 @@ struct SettingsView: View {
                     ForEach(MuscleGroup.allCases, id: \.self) { group in
                         NavigationLink(group.title) { RepRangeList(group: group) }
                     }
+                    NavigationLink("Your exercises and machines") { CustomList() }
+                        .accessibilityIdentifier("customList")
                 } header: {
                     Text("Rep ranges")
                 } footer: {
-                    Text("Each exercise has a rep range. Reach the top number on every set and the app suggests the next weight up.")
+                    Text("Each exercise has a rep range. Reach the top number on every set and the app suggests the next weight up. Exercises and machines that are not on the built-in list can be added under Your exercises and machines.")
                 }
             }
             .navigationTitle("Settings")

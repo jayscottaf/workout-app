@@ -75,6 +75,8 @@ struct LoggingView: View {
             }
         }
         .onAppear {
+            // The Lock Screen card stays up for the whole workout, so rests started on the Watch show there too.
+            rest.beginWorkout(title: workout.title, next: workout.nextUpText(after: nil))
             // Reopened after Finish: start on the first exercise with sets left, else the last one.
             // Open on the exercise the Watch is showing, if any.
             if let shared = WatchLink.shared.currentEntryID, let match = entries.firstIndex(where: { $0.id == shared }) {
@@ -141,12 +143,31 @@ struct LoggingView: View {
                             .monospacedDigit()
                             .foregroundStyle(Theme.muted)
                     }
+                    // Which gym this is. Tap to tick what it has, even mid-workout.
+                    if let gym {
+                        Button { showEquipment = true } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: "mappin.circle.fill")
+                                Text(gym.name).lineLimit(1)
+                                Image(systemName: "chevron.down").font(.system(size: 9, weight: .heavy))
+                            }
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.volt)
+                            .frame(minHeight: 24)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("At \(gym.name). Change its equipment")
+                        .accessibilityIdentifier("gymButton")
+                    }
                 }
                 Spacer()
                 Menu {
                     Button { showAdd = true } label: { Label("Add an exercise", systemImage: "plus") }
                     if gym != nil {
-                        Button { showEquipment = true } label: { Label("Gym equipment", systemImage: "dumbbell") }
+                        Button { showEquipment = true } label: {
+                            Label("Equipment at \(gym?.name ?? "this gym")", systemImage: "dumbbell")
+                        }
                     }
                 } label: {
                     Image(systemName: "plus")
@@ -196,7 +217,7 @@ struct LoggingView: View {
                     Text(subtitle(entry))
                         .font(.system(size: 14))
                         .foregroundStyle(Theme.muted)
-                    if !entry.isBodyweight { stepMenu(entry) }
+                    stepMenu(entry)
                 }
                 Spacer(minLength: 0)
                 VStack(alignment: .trailing, spacing: 8) {
@@ -237,7 +258,7 @@ struct LoggingView: View {
             }
             .card(padding: 12, radius: 16, color: Theme.voltDim)
 
-            if let first = entry.nextSet, entry.completedSets.isEmpty, position == 0 || entry.plateBar != nil {
+            if let first = entry.nextSet, entry.completedSets.isEmpty, !entry.isBodyweight, position == 0 || entry.plateBar != nil {
                 warmUpCard(target: first.weight, entry: entry)
             }
 
@@ -391,7 +412,8 @@ struct LoggingView: View {
                     .multilineTextAlignment(.trailing)
             }
             HStack(spacing: 10) {
-                stepper(value: set.weight <= 0 ? "BW" : Fmt.weight(set.weight), unit: set.weight <= 0 ? "body weight" : "lb",
+                stepper(value: set.weight <= 0 ? "BW" : (entry.isBodyweight ? "+" : "") + Fmt.weight(set.weight),
+                        unit: set.weight <= 0 ? "body weight" : (entry.isBodyweight ? "lb held" : "lb"),
                         lessLabel: "Lower weight by \(Fmt.weight(entry.increment)) pounds",
                         moreLabel: "Raise weight by \(Fmt.weight(entry.increment)) pounds",
                         less: { set.weight = max(0, set.weight - entry.increment) },
@@ -520,17 +542,8 @@ struct LoggingView: View {
             rest.stop()
         } else {
             rest.start(seconds: RestSetting.seconds(default: entry.restSeconds), title: workout.title,
-                       next: nextUpText(after: entry))
+                       next: workout.nextUpText(after: entry))
         }
-    }
-
-    /// "Next: Bench press · 135 lb × 8", for the rest countdown on the Lock Screen.
-    private func nextUpText(after entry: ExerciseEntry) -> String {
-        let upcoming = entry.nextSet.map { (entry, $0) }
-            ?? workout.sortedEntries.first { !$0.isDone }.flatMap { other in other.nextSet.map { (other, $0) } }
-        guard let (nextEntry, set) = upcoming else { return "" }
-        let amount = set.weight > 0 ? "\(Fmt.weight(set.weight)) lb × \(set.reps)" : "\(set.reps) reps"
-        return "Next: \(nextEntry.name) · \(amount)"
     }
 
     private var finishTitle: String {
@@ -549,7 +562,7 @@ struct LoggingView: View {
     }
 
     private func finish() {
-        rest.stop()
+        rest.endWorkout()
         guard !workout.completedSets.isEmpty else {
             discard()
             return
@@ -570,7 +583,7 @@ struct LoggingView: View {
     }
 
     private func discard() {
-        rest.stop()
+        rest.endWorkout()
         onDiscard()
         // Delete after the screen has closed, so nothing on screen is still showing the workout.
         let store = context

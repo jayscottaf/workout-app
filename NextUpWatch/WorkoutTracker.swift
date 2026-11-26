@@ -117,6 +117,10 @@ final class RestClock: ObservableObject {
     @Published private(set) var endDate: Date?
     @Published private(set) var total: TimeInterval = 0
     private var timer: Timer?
+    /// When the countdown was last started, lengthened or skipped here or on the phone. The newest change wins.
+    private(set) var changedAt: Date?
+    /// Called after a change made on this Watch, so the phone can follow.
+    var onChange: ((WatchRest) -> Void)?
 
     var isRunning: Bool { endDate != nil }
 
@@ -129,6 +133,7 @@ final class RestClock: ObservableObject {
         total = TimeInterval(seconds)
         endDate = Date().addingTimeInterval(total)
         schedule()
+        changed()
     }
 
     func add(seconds: Int) {
@@ -136,9 +141,35 @@ final class RestClock: ObservableObject {
         self.endDate = endDate.addingTimeInterval(TimeInterval(seconds))
         total += TimeInterval(seconds)
         schedule()
+        changed()
     }
 
     func stop() {
+        let wasRunning = isRunning
+        clear()
+        if wasRunning { changed() }
+    }
+
+    /// Follow a countdown started, lengthened or skipped on the phone, if it is newer than this one.
+    func follow(_ rest: WatchRest) {
+        if let changedAt, rest.changedAt <= changedAt { return }
+        changedAt = rest.changedAt
+        guard let end = rest.endsAt, end > Date() else {
+            clear()
+            return
+        }
+        endDate = end
+        total = max(rest.total, end.timeIntervalSinceNow)
+        schedule()
+    }
+
+    private func changed() {
+        let now = Date()
+        changedAt = now
+        onChange?(WatchRest(endsAt: endDate, total: total, changedAt: now))
+    }
+
+    private func clear() {
         timer?.invalidate()
         timer = nil
         endDate = nil
@@ -151,7 +182,7 @@ final class RestClock: ObservableObject {
             Task { @MainActor in
                 guard let self, self.isRunning else { return }
                 WKInterfaceDevice.current().play(.notification)
-                self.stop()
+                self.clear()
             }
         }
     }

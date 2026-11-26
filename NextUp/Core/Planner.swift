@@ -33,7 +33,7 @@ struct ExerciseIdea {
 enum Rotation {
     /// The day after the one trained most recently. No fixed schedule.
     static func nextDay(history: History) -> DayType {
-        history.lastDay?.next ?? .chestTriceps
+        history.lastDay?.next ?? Routine.days.first ?? .chestTriceps
     }
 
     /// Abs is an add-on, offered again once it has been `everyDays` days.
@@ -96,12 +96,12 @@ enum Planner {
 
     /// Slot choice: what you last did for this slot at this gym, else the default, else the closest thing this gym has.
     static func choose(defaultID: String, slotID: String, gym: GymInfo?, history: History, excluding: Set<String>) -> ExerciseDef? {
-        if let lastID = history.lastExercise(slotID: slotID, gymID: gym?.id), !excluding.contains(lastID),
+        if let lastID = history.lastExercise(slotID: slotID, gymID: gym?.id), !excluding.contains(lastID), !ExerciseCatalog.isRetired(lastID),
            let last = ExerciseCatalog.exercise(lastID), isAvailable(last, gym: gym) {
             return last
         }
         guard let standard = ExerciseCatalog.exercise(defaultID) else { return nil }
-        if isAvailable(standard, gym: gym), !excluding.contains(standard.id) { return standard }
+        if isAvailable(standard, gym: gym), !excluding.contains(standard.id), !ExerciseCatalog.isRetired(standard.id) { return standard }
         return swapOptions(for: standard, gym: gym, history: history, excluding: excluding).first?.exercise
     }
 

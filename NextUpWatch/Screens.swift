@@ -10,7 +10,7 @@ struct TodayScreen: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let next = model.snapshot?.next {
-                Caps("Day \(next.dayNumber) of 3")
+                Caps("Day \(next.dayNumber) of \(next.dayCount ?? 3)")
                     .padding(.top, 6)
                 Text(next.title)
                     .font(Look.rounded(24))
@@ -321,7 +321,7 @@ struct LogPage: View {
             List {
                 if let entry, !entry.isDone {
                     Section {
-                        if !entry.isBodyweight {
+                        if true {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Weight steps").font(.system(size: 12)).foregroundStyle(Look.muted)
                                 HStack(spacing: 4) {

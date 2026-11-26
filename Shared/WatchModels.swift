@@ -13,11 +13,24 @@ struct WatchSnapshot: Codable, Equatable {
     var summary: WatchSummary?
     /// Rest between sets chosen in Settings, in seconds. 0 means automatic.
     var restOverride: Int = 0
+    /// The rest countdown, so the phone and the Watch show the same one.
+    var rest: WatchRest? = nil
     var sentAt: Date = Date()
+}
+
+/// A rest countdown shared by the phone and the Watch. The newest change wins.
+struct WatchRest: Codable, Equatable {
+    /// nil when there is no countdown (skipped or never started).
+    var endsAt: Date?
+    var total: Double
+    /// When it was last started, lengthened or skipped, on either device.
+    var changedAt: Date
 }
 
 struct WatchNext: Codable, Equatable {
     var dayNumber: Int
+    /// How many days the routine has (nil from an older iPhone app: three).
+    var dayCount: Int?
     var title: String
     var exerciseCount: Int
     var minutes: Int
@@ -108,6 +121,8 @@ enum WatchCommand: Codable, Equatable {
     case add(exerciseID: String)
     /// The Watch moved to this exercise: show it on the phone too.
     case focus(entryID: UUID)
+    /// The rest countdown was started, lengthened or skipped on the Watch.
+    case rest(WatchRest)
 }
 
 /// Keys of the dictionaries sent over the phone-to-Watch connection.

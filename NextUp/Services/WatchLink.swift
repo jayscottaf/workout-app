@@ -94,7 +94,7 @@ final class WatchLink: NSObject, ObservableObject {
     private func makeSnapshot() -> WatchSnapshot? {
         guard context != nil else { return nil }
         let workouts = fetchWorkouts()
-        var snapshot = WatchSnapshot(restOverride: RestSetting.current, sentAt: Date())
+        var snapshot = WatchSnapshot(restOverride: RestSetting.current, rest: RestTimer.shared.shared, sentAt: Date())
 
         if let active = workouts.first(where: { $0.endedAt == nil }) {
             snapshot.active = WatchWorkout(
@@ -115,7 +115,7 @@ final class WatchLink: NSObject, ObservableObject {
             let day = Rotation.nextDay(history: history)
             let plan = Planner.plan(day: day, includeAbs: false, quick: false, gym: currentGym()?.info, history: history,
                                     rangeOverrides: overrides())
-            snapshot.next = WatchNext(dayNumber: day.number, title: day.title, exerciseCount: plan.count,
+            snapshot.next = WatchNext(dayNumber: day.number, dayCount: Routine.days.count, title: day.title, exerciseCount: plan.count,
                                       minutes: Planner.estimateMinutes(plan))
         }
 
@@ -171,6 +171,10 @@ final class WatchLink: NSObject, ObservableObject {
                 add(exerciseID: exerciseID, context: context)
             case .focus(let entryID):
                 currentEntryID = entryID
+            case .rest(let rest):
+                let workout = fetchWorkouts().first { $0.endedAt == nil }
+                let current = workout?.entries.first { $0.id == currentEntryID }
+                RestTimer.shared.follow(rest, title: workout?.title ?? "", next: workout?.nextUpText(after: current) ?? "")
             }
         }
         if let snapshot = makeSnapshot(), let data = WatchWire.encode(snapshot) {
@@ -187,6 +191,8 @@ final class WatchLink: NSObject, ObservableObject {
         let day = Rotation.nextDay(history: history)
         let plan = Planner.plan(day: day, includeAbs: false, quick: quick, gym: gym?.info, history: history,
                                 rangeOverrides: overrides())
+        // A day with no exercises yet: nothing to start.
+        guard !plan.isEmpty else { return }
         let workout = Store.start(plan: plan, day: day, quick: quick, gym: gym, context: context)
         // The Watch started this one, so it is already open there.
         launchedWatchFor = workout.id
@@ -219,6 +225,8 @@ final class WatchLink: NSObject, ObservableObject {
             }
             return
         }
+        // Finished or discarded on the Watch: take the workout card off the Lock Screen.
+        RestTimer.shared.endWorkout()
         guard !workout.completedSets.isEmpty else {
             // Nothing logged: close the phone's workout screen first, then delete.
             closeWorkoutID = workoutID

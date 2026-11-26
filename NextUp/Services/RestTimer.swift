@@ -27,6 +27,9 @@ enum RestSetting {
 /// The automatic rest countdown that starts when a set is logged.
 @MainActor
 final class RestTimer: ObservableObject {
+    /// One countdown for the whole app, shared with the Apple Watch.
+    static let shared = RestTimer()
+
     @Published private(set) var remaining: TimeInterval = 0
     @Published private(set) var total: TimeInterval = 0
 
@@ -40,10 +43,46 @@ final class RestTimer: ObservableObject {
         || ProcessInfo.processInfo.arguments.contains("-restActivity")
     private var title = ""
     private var next = ""
+    /// When the countdown was last started, lengthened or skipped here or on the Watch. The newest change wins.
+    private(set) var changedAt: Date?
+    /// Called after a change made on this phone, so the Watch can follow.
+    var onChange: (() -> Void)?
 
-    init() {
-        // A countdown left on the Lock Screen by an earlier run of the app is out of date.
-        RestLiveActivity.end()
+    /// What the Watch should show.
+    var shared: WatchRest? {
+        changedAt.map { WatchRest(endsAt: endDate, total: total, changedAt: $0) }
+    }
+
+    /// A workout is open: the Lock Screen card stays up between rests.
+    private var inWorkout = false
+
+    init() {}
+
+    /// At launch: keep the Lock Screen card if a workout is still in progress, else clear any left over.
+    func resume(workoutTitle: String?) {
+        guard liveActivityEnabled else { return }
+        if let workoutTitle {
+            inWorkout = true
+            title = workoutTitle
+            RestLiveActivity.adopt()
+        } else {
+            RestLiveActivity.end()
+        }
+    }
+
+    /// The workout screen is open (the app is in front, so iOS lets it put up the Lock Screen card).
+    func beginWorkout(title: String, next: String) {
+        inWorkout = true
+        self.title = title
+        self.next = next
+        if !isRunning { showBetweenSets() }
+    }
+
+    /// The workout was finished or discarded.
+    func endWorkout() {
+        inWorkout = false
+        stop()
+        if liveActivityEnabled { RestLiveActivity.end() }
     }
 
     var isRunning: Bool { endDate != nil }
@@ -65,6 +104,7 @@ final class RestTimer: ObservableObject {
         startTicking()
         scheduleNotification()
         showLiveActivity()
+        changed()
     }
 
     func add(seconds: Int) {
@@ -74,14 +114,44 @@ final class RestTimer: ObservableObject {
         tick()
         scheduleNotification()
         showLiveActivity()
+        changed()
     }
 
     func stop() {
+        let wasRunning = isRunning
+        clear()
+        if wasRunning { changed() }
+    }
+
+    /// Follow a countdown started, lengthened or skipped on the Watch, if it is newer than this one.
+    func follow(_ rest: WatchRest, title: String, next: String = "") {
+        if let changedAt, rest.changedAt <= changedAt { return }
+        changedAt = rest.changedAt
+        guard let end = rest.endsAt, end > Date() else {
+            clear()
+            return
+        }
+        endDate = end
+        total = max(rest.total, end.timeIntervalSinceNow)
+        remaining = end.timeIntervalSinceNow
+        if !title.isEmpty { self.title = title }
+        if !next.isEmpty { self.next = next }
+        startTicking()
+        scheduleNotification()
+        showLiveActivity()
+    }
+
+    private func changed() {
+        changedAt = Date()
+        onChange?()
+    }
+
+    private func clear() {
         timer?.invalidate()
         timer = nil
         endDate = nil
         remaining = 0
-        if liveActivityEnabled { RestLiveActivity.end() }
+        if inWorkout { showBetweenSets() } else if liveActivityEnabled { RestLiveActivity.end() }
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [notificationID])
     }
 
@@ -97,8 +167,14 @@ final class RestTimer: ObservableObject {
         remaining = max(0, endDate.timeIntervalSinceNow)
         if remaining <= 0 {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-            stop()
+            clear()
         }
+    }
+
+    private func showBetweenSets() {
+        guard liveActivityEnabled else { return }
+        let now = Date()
+        RestLiveActivity.show(start: now, end: now, title: title, next: next, resting: false)
     }
 
     private func showLiveActivity() {

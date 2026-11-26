@@ -131,6 +131,131 @@ enum Store {
         try? context.save()
     }
 
+    // MARK: your own exercises and machines
+
+    /// Reads the exercises and machines you made into the catalog. Run at launch and after every change.
+    static func loadCustom(_ context: ModelContext) {
+        let machines = (try? context.fetch(FetchDescriptor<CustomEquipment>(sortBy: [SortDescriptor(\.createdAt)]))) ?? []
+        EquipmentCatalog.custom = machines.filter { !$0.retired }.map(\.type)
+        EquipmentCatalog.retired = machines.filter(\.retired).map(\.type)
+        let exercises = (try? context.fetch(FetchDescriptor<CustomExercise>(sortBy: [SortDescriptor(\.createdAt)]))) ?? []
+        ExerciseCatalog.custom = exercises.filter { !$0.retired }.map(\.def)
+        ExerciseCatalog.retired = exercises.filter(\.retired).map(\.def)
+    }
+
+    /// A new kind of machine. If you are at a gym, it is added there straight away.
+    @discardableResult
+    static func createMachine(name: String, kind: CustomEquipment.Kind, increment: Double, gym: Gym?, context: ModelContext) -> EquipmentType {
+        let machine = CustomEquipment(name: name, kind: kind, increment: increment)
+        context.insert(machine)
+        try? context.save()
+        loadCustom(context)
+        if let gym { setHas(machine.type, true, gym: gym, context: context) }
+        return machine.type
+    }
+
+    /// A new exercise. If you are at a gym that is not marked as having what it uses, that gets ticked too.
+    @discardableResult
+    static func createExercise(name: String, muscle: Muscle, equipmentID: String, compound: Bool, repLow: Int, repHigh: Int,
+                               gym: Gym?, context: ModelContext) -> ExerciseDef {
+        let exercise = CustomExercise(name: name, muscle: muscle, equipmentID: equipmentID, repLow: repLow, repHigh: repHigh,
+                                      compound: compound)
+        context.insert(exercise)
+        try? context.save()
+        loadCustom(context)
+        if let gym, equipmentID != EquipmentCatalog.bodyweightID, let type = EquipmentCatalog.type(equipmentID),
+           !gym.equipment.contains(where: { $0.typeID == equipmentID }) {
+            setHas(type, true, gym: gym, context: context)
+        }
+        return exercise.def
+    }
+
+    /// Built-in exercises that look like one you made: same muscle group, and every word of one name is in the other
+    /// ("Preacher curl" matches "EZ-bar preacher curl" and "Preacher curl machine"). Closest first, at most three.
+    static func builtInMatches(for exercise: CustomExercise) -> [ExerciseDef] {
+        func words(_ text: String) -> Set<String> {
+            Set(text.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { !$0.isEmpty }
+                .map { $0.hasSuffix("s") && $0.count > 3 ? String($0.dropLast()) : $0 })
+        }
+        let mine = words(exercise.name)
+        guard !mine.isEmpty else { return [] }
+        let group = exercise.def.muscle.group
+        return ExerciseCatalog.builtIn
+            .filter { $0.muscle.group == group }
+            .compactMap { candidate -> (Int, ExerciseDef)? in
+                let theirs = words(candidate.name)
+                guard mine.isSubset(of: theirs) || theirs.isSubset(of: mine) else { return nil }
+                return (theirs.symmetricDifference(mine).count, candidate)
+            }
+            .sorted { $0.0 < $1.0 }
+            .prefix(3)
+            .map(\.1)
+    }
+
+    /// Use the built-in exercise instead of one you made: sets you logged move over to it, your routine
+    /// days switch to it, and gyms that had your machine get the built-in equipment instead.
+    static func replace(_ exercise: CustomExercise, with builtIn: ExerciseDef, context: ModelContext) {
+        let oldID = exercise.id
+        let newID = builtIn.id
+        let entries = (try? context.fetch(FetchDescriptor<ExerciseEntry>(predicate: #Predicate { $0.exerciseID == oldID }))) ?? []
+        for entry in entries {
+            entry.exerciseID = newID
+            entry.historyKey = HistoryKey.make(exerciseID: newID, equipment: nil)
+            entry.equipmentID = nil
+            entry.equipmentName = builtIn.equipmentType.name
+        }
+        for prefs in (try? context.fetch(FetchDescriptor<ExercisePrefs>(predicate: #Predicate { $0.exerciseID == oldID }))) ?? [] {
+            prefs.exerciseID = newID
+        }
+
+        // Gyms that have your machine get the built-in equipment, and your machine goes if nothing else uses it.
+        let machineID = exercise.equipmentID
+        if machineID.hasPrefix(CustomEquipment.prefix) {
+            for item in (try? context.fetch(FetchDescriptor<Equipment>(predicate: #Predicate { $0.typeID == machineID }))) ?? [] {
+                if let gym = item.gym, !gym.equipment.contains(where: { $0.typeID == builtIn.equipment }) {
+                    setHas(builtIn.equipmentType, true, gym: gym, context: context)
+                }
+            }
+            let others = ((try? context.fetch(FetchDescriptor<CustomExercise>())) ?? [])
+                .filter { $0.id != oldID && !$0.retired && $0.equipmentID == machineID }
+            if others.isEmpty,
+               let machine = ((try? context.fetch(FetchDescriptor<CustomEquipment>())) ?? []).first(where: { $0.id == machineID }) {
+                retire(machine, context: context)
+            }
+        }
+
+        exercise.retired = true
+        try? context.save()
+        loadCustom(context)
+        Task { @MainActor in
+            RoutineStore.shared.days = RoutineStore.shared.days.map { day in
+                var day = day
+                for index in day.items.indices where day.items[index].exercise == oldID {
+                    day.items[index].exercise = newID
+                }
+                return day
+            }
+        }
+    }
+
+    static func retire(_ exercise: CustomExercise, context: ModelContext) {
+        exercise.retired = true
+        try? context.save()
+        loadCustom(context)
+    }
+
+    /// Removes the machine from every gym. Workouts already logged on it are kept.
+    static func retire(_ machine: CustomEquipment, context: ModelContext) {
+        machine.retired = true
+        let id = machine.id
+        for item in (try? context.fetch(FetchDescriptor<Equipment>(predicate: #Predicate { $0.typeID == id }))) ?? [] {
+            context.delete(item)
+        }
+        try? context.save()
+        loadCustom(context)
+    }
+
     static func addSet(to entry: ExerciseEntry, context: ModelContext) {
         let last = entry.sortedSets.last
         let target = SetTarget(weight: last?.weight ?? 0, reps: last?.reps ?? entry.repLow, lastWeight: nil, lastReps: nil)

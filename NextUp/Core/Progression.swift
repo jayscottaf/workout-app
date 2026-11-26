@@ -70,7 +70,8 @@ enum Progression {
             return Suggestion(kind: .firstTime, targets: targets, explanation: text)
         }
 
-        let weightless = bodyweight || last.topWeight == 0
+        // Body weight moves count as weighted once you hold a plate or dumbbell.
+        let weightless = last.topWeight == 0
         let days = daysBetween(last.date, now)
 
         // Layoff: ease back in.
@@ -88,7 +89,10 @@ enum Progression {
         // Body weight moves progress by reps only.
         if weightless {
             let targets = last.sets.map { SetTarget(weight: $0.weight, reps: $0.reps + 1, lastWeight: $0.weight, lastReps: $0.reps) }
-            return Suggestion(kind: .progress, targets: targets, explanation: "Body weight move: aim for one more rep on each set than last time.")
+            let text = bodyweight && last.sets.allSatisfy({ $0.reps >= high })
+                ? "You hit \(high) reps on every set. Aim for one more, or hold a plate and tap + to add its weight."
+                : "Body weight move: aim for one more rep on each set than last time."
+            return Suggestion(kind: .progress, targets: targets, explanation: text)
         }
 
         // Top of the range on every set: go up one step.
@@ -143,7 +147,7 @@ enum Progression {
 
     /// Shown while logging: what earns the next step up.
     static func lookAhead(weight: Double, range: ClosedRange<Int>, increment: Double, bodyweight: Bool) -> String {
-        if bodyweight || weight <= 0 { return "Beat last time by one rep per set." }
+        if weight <= 0 { return "Beat last time by one rep per set." }
         return "Get \(range.upperBound) on every set and next time moves up to \(Fmt.lb(roundTo(weight + increment, increment)))."
     }
 

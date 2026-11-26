@@ -15,6 +15,7 @@ struct GymsView: View {
     @State private var renaming = false
     @State private var nameDraft = ""
     @State private var confirmDelete = false
+    @State private var tickingGym: Gym?
 
     private var currentGym: Gym? { gyms.first { $0.id.uuidString == currentGymID } ?? gyms.first }
     private var selected: Gym? { gyms.first { $0.id == selectedID } ?? currentGym }
@@ -38,7 +39,11 @@ struct GymsView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(gyms) { item in
-                            Button(item.name) { selectedID = item.id }
+                            Button(item.name) {
+                                // Tapping the gym already shown opens its equipment list.
+                                if item.id == gym?.id { tickingGym = item } else { selectedID = item.id }
+                            }
+                            .accessibilityIdentifier("gymChip-\(item.name)")
                                 .buttonStyle(ChipButtonStyle(fill: item.id == gym?.id ? Theme.volt : Theme.surface,
                                                              foreground: item.id == gym?.id ? Theme.onVolt : Theme.text))
                         }
@@ -47,6 +52,15 @@ struct GymsView: View {
 
                 if let gym {
                     gymCard(gym)
+                    Button { tickingGym = gym } label: {
+                        Label("Choose equipment at \(gym.name)", systemImage: "checklist")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(Theme.onVolt)
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .background(Theme.volt, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("chooseEquipment")
                     let shared = gym.sortedEquipment.filter { $0.type?.category != .machine }
                     let machines = gym.sortedEquipment.filter { $0.type?.category == .machine }
                     if !shared.isEmpty {
@@ -84,6 +98,9 @@ struct GymsView: View {
         }
         .sheet(isPresented: $showAddEquipment) {
             if let gym { AddEquipmentSheet(gym: gym) }
+        }
+        .sheet(item: $tickingGym) { item in
+            GymEquipmentSheet(gym: item)
         }
         .sheet(item: $editing) { item in
             EquipmentEditSheet(equipment: item)
@@ -204,6 +221,7 @@ struct AddGymSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var chosen = Set(EquipmentCatalog.commonIDs)
+    @State private var newMachine = false
 
     var body: some View {
         NavigationStack {
@@ -219,6 +237,7 @@ struct AddGymSheet: View {
                                 if isOn { chosen.insert(type.id) } else { chosen.remove(type.id) }
                             }))
                     }
+                    Button("Add a machine that is not listed") { newMachine = true }
                 } header: {
                     Text("What does it have?")
                 } footer: {
@@ -238,6 +257,9 @@ struct AddGymSheet: View {
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
+            .sheet(isPresented: $newMachine) {
+                NewMachineSheet(gym: nil) { chosen.insert($0.id) }
+            }
         }
     }
 }
@@ -246,6 +268,7 @@ struct AddEquipmentSheet: View {
     let gym: Gym
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @State private var newMachine = false
 
     var body: some View {
         NavigationStack {
@@ -273,12 +296,14 @@ struct AddEquipmentSheet: View {
                             }
                         }
                     }
+                    Button("Add a machine that is not listed") { newMachine = true }
                 } footer: {
                     Text("Add the same machine twice if the gym has two that feel different. Each keeps its own history.")
                 }
             }
             .navigationTitle("Add to \(gym.name)")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $newMachine) { NewMachineSheet(gym: gym) }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
@@ -335,6 +360,7 @@ struct GymEquipmentSheet: View {
     let gym: Gym
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @State private var newMachine = false
 
     var body: some View {
         NavigationStack {
@@ -351,12 +377,15 @@ struct GymEquipmentSheet: View {
                         }
                         .tint(Theme.volt)
                     }
+                    Button("Add a machine that is not listed") { newMachine = true }
+                        .accessibilityIdentifier("newMachine")
                 } footer: {
                     Text("Changes are saved for \(gym.name). Swap and Add an exercise only offer what is ticked. Rename machines or set their weight steps under Gyms.")
                 }
             }
             .navigationTitle("\(gym.name) equipment")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $newMachine) { NewMachineSheet(gym: gym) }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }

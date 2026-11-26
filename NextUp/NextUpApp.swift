@@ -5,13 +5,14 @@ import SwiftData
 struct NextUpApp: App {
     private let container: ModelContainer
     @StateObject private var health: HealthService
-    @StateObject private var rest = RestTimer()
+    @StateObject private var rest = RestTimer.shared
 
     init() {
         // "-demoData" fills the app with six weeks of sample history kept in memory only.
         // It is used for screenshots and UI tests and never touches real data.
         let demo = ProcessInfo.processInfo.arguments.contains("-demoData")
-        let schema = Schema([Gym.self, Equipment.self, Workout.self, ExerciseEntry.self, SetEntry.self, ExercisePrefs.self])
+        let schema = Schema([Gym.self, Equipment.self, Workout.self, ExerciseEntry.self, SetEntry.self, ExercisePrefs.self,
+                             CustomEquipment.self, CustomExercise.self])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: demo)
         do {
             container = try ModelContainer(for: schema, configurations: [configuration])
@@ -19,10 +20,19 @@ struct NextUpApp: App {
             fatalError("Could not open the workout database: \(error)")
         }
         Store.seedIfNeeded(ModelContext(container), demo: demo)
+        // The Lock Screen card stays while a workout is in progress (even if the app was closed), else it is cleared.
+        let open = try? ModelContext(container).fetch(FetchDescriptor<Workout>(predicate: #Predicate { $0.endedAt == nil })).first
+        RestTimer.shared.resume(workoutTitle: open?.title)
+        // Your routine (the days and their exercises) is read before anything plans a workout.
+        _ = RoutineStore.shared
+        // Exercises and machines you made yourself join the built-in lists.
+        Store.loadCustom(ModelContext(container))
         let health = HealthService()
         _health = StateObject(wrappedValue: health)
         // Apple Watch: also runs when the Watch wakes the app in the background.
         WatchLink.shared.activate(container: container, health: health)
+        // A countdown started, lengthened or skipped on the phone shows on the Watch too.
+        RestTimer.shared.onChange = { WatchLink.shared.push() }
     }
 
     var body: some Scene {

@@ -18,6 +18,9 @@ struct TodayView: View {
     @State private var extras: [String] = []
     @State private var dayOverride: DayType?
     @State private var showSettings = false
+    @State private var showRoutine = false
+    @State private var equipmentGym: Gym?
+    @ObservedObject private var routine = RoutineStore.shared
     @State private var showRecap = false
 
     private var currentGym: Gym? {
@@ -27,7 +30,8 @@ struct TodayView: View {
     var body: some View {
         let history = Store.history(workouts)
         let gym = currentGym
-        let day = dayOverride ?? Rotation.nextDay(history: history)
+        // A day picked by hand is looked up again, so edits to the routine show straight away.
+        let day = dayOverride.flatMap { picked in routine.days.first { $0.id == picked.id } } ?? Rotation.nextDay(history: history)
         let overrides = Store.rangeOverrides(prefs)
         let plan = Planner.plan(day: day, includeAbs: includeAbs, quick: false, gym: gym?.info, history: history,
                                 rangeOverrides: overrides)
@@ -58,6 +62,8 @@ struct TodayView: View {
         }
         .screen()
         .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $showRoutine) { RoutineSheet() }
+        .sheet(item: $equipmentGym) { item in GymEquipmentSheet(gym: item) }
         .sheet(isPresented: $showRecap) { RecapSheet(month: previousMonth) }
     }
 
@@ -84,12 +90,19 @@ struct TodayView: View {
                         }
                     }
                 }
+                if let gym {
+                    Divider()
+                    Button { equipmentGym = gym } label: {
+                        Label("Equipment at \(gym.name)", systemImage: "checklist")
+                    }
+                }
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "mappin.circle.fill").foregroundStyle(Theme.volt)
                     Text(gym?.name ?? "No gym")
                         .font(.system(size: 14, weight: .semibold))
                         .lineLimit(1)
+                    Image(systemName: "chevron.down").font(.system(size: 10, weight: .heavy)).foregroundStyle(Theme.muted)
                 }
                 .padding(.horizontal, 14)
                 .frame(height: 44)
@@ -108,12 +121,14 @@ struct TodayView: View {
                       overrides: [String: ClosedRange<Int>]) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                CapsLabel("Next up · day \(day.number) of 3", color: Theme.onVolt)
+                CapsLabel("Next up · day \(day.number) of \(routine.days.count)", color: Theme.onVolt)
                 Spacer()
                 Menu {
                     ForEach(DayType.allCases, id: \.self) { option in
                         Button(option.title) { dayOverride = option }
                     }
+                    Divider()
+                    Button("Edit routine", systemImage: "slider.horizontal.3") { showRoutine = true }
                 } label: {
                     HStack(spacing: 4) {
                         Text("Change")
@@ -141,6 +156,7 @@ struct TodayView: View {
                 }
                 .buttonStyle(PrimaryButtonStyle(fill: Theme.onVolt, foreground: Theme.text, height: 52))
                 .accessibilityIdentifier("startWorkout")
+                .disabled(plan.isEmpty)
 
                 Button {
                     start(day: day, quick: true, history: history, gym: gym, overrides: overrides)
@@ -179,7 +195,7 @@ struct TodayView: View {
     }
 
     private func lastDone(_ day: DayType) -> String {
-        guard let last = Store.finished(workouts).first(where: { $0.day == day }) else { return "first time" }
+        guard let last = Store.finished(workouts).first(where: { $0.dayRaw == day.id }) else { return "first time" }
         return "last done \(last.startedAt.formatted(.dateTime.month(.abbreviated).day()))"
     }
 
@@ -191,6 +207,8 @@ struct TodayView: View {
             plan.append(Planner.planExercise(exercise, slotID: nil, gym: gym?.info, history: history,
                                              rangeOverrides: overrides, quick: quick))
         }
+        // A day with no exercises yet: nothing to start.
+        guard !plan.isEmpty else { return }
         let workout = Store.start(plan: plan, day: day, quick: quick, gym: gym, context: context)
         includeAbs = false
         extras = []

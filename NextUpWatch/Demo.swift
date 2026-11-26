@@ -87,7 +87,7 @@ enum Demo {
                                                                          lastWeight: nil, lastReps: nil, done: false) }))
             snapshot.active = active
             model.setSnapshot(snapshot)
-        case .refresh, .tracking, .healthSaved, .later, .step, .focus:
+        case .refresh, .tracking, .healthSaved, .later, .step, .focus, .rest:
             break
         }
     }

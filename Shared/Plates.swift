@@ -6,6 +6,8 @@ import Foundation
 enum Plates {
     /// A standard Olympic bar, in pounds.
     static let barWeight: Double = 45
+    /// A typical EZ curl bar (the bent one). They vary from about 15 to 25 lb.
+    static let ezBarWeight: Double = 20
     /// The plates most gyms have, heaviest first.
     static let standard: [Double] = [45, 35, 25, 10, 5, 2.5]
 
@@ -21,6 +23,7 @@ enum Plates {
     static func bar(forEquipment typeID: String) -> Double? {
         switch typeID {
         case "barbell": return barWeight
+        case "ezBar": return ezBarWeight
         case "legPress", "hackSquat", "rowMachine": return 0
         default: return nil
         }

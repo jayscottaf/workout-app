@@ -46,6 +46,8 @@ final class WatchModel: NSObject, ObservableObject {
     private var session: WCSession? { WCSession.isSupported() ? WCSession.default : nil }
 
     func activate() {
+        // A countdown started, lengthened or skipped here shows on the phone too.
+        rest.onChange = { [weak self] value in self?.send(.rest(value)) }
         if isDemo {
             Demo.prepare(self)
             return
@@ -217,7 +219,7 @@ final class WatchModel: NSObject, ObservableObject {
     /// The phone is out of reach. Things already done are delivered later; requests are dropped.
     private func queue(_ command: WatchCommand, _ payload: [String: Any]) {
         switch command {
-        case .log, .finish, .tracking, .healthSaved, .swap, .later, .step, .add:
+        case .log, .finish, .tracking, .healthSaved, .swap, .later, .step, .add, .rest:
             session?.transferUserInfo(payload)
         case .focus:
             break
@@ -279,6 +281,7 @@ final class WatchModel: NSObject, ObservableObject {
             next.active?.currentEntryID = mine
         }
         snapshot = next
+        if let shared = next.rest { rest.follow(shared) }
         if next.active != nil { isStarting = false }
         syncTracking()
     }

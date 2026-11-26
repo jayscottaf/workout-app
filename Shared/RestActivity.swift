@@ -10,6 +10,10 @@ struct RestActivityAttributes: ActivityAttributes {
         var endDate: Date
         /// "Next: Bench press · 135 lb × 8"
         var next: String
+        /// false between sets: the card stays up for the whole workout so a rest started on the Watch
+        /// can show while the phone is locked (iOS only lets a locked app update a card, not start one).
+        /// nil on cards from older builds, which were always resting.
+        var resting: Bool?
     }
 
     /// The workout's name, e.g. "Chest & triceps".

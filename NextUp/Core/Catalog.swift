@@ -20,13 +20,13 @@ enum MuscleGroup: String, CaseIterable, Codable, Hashable {
 }
 
 enum Muscle: String, CaseIterable, Codable, Hashable {
-    case chest, triceps, lats, upperBack, biceps, delts, rearDelts, quads, hamstrings, glutes, calves, abs
+    case chest, triceps, lats, upperBack, lowerBack, biceps, delts, rearDelts, quads, hamstrings, glutes, calves, abs
 
     var group: MuscleGroup {
         switch self {
         case .chest: return .chest
         case .triceps: return .triceps
-        case .lats, .upperBack: return .back
+        case .lats, .upperBack, .lowerBack: return .back
         case .biceps: return .biceps
         case .delts, .rearDelts: return .shoulders
         case .quads, .hamstrings, .glutes, .calves: return .legs
@@ -40,6 +40,7 @@ enum Muscle: String, CaseIterable, Codable, Hashable {
         case .triceps: return "Triceps"
         case .lats: return "Lats"
         case .upperBack: return "Upper back"
+        case .lowerBack: return "Lower back"
         case .biceps: return "Biceps"
         case .delts: return "Shoulders"
         case .rearDelts: return "Rear delts"
@@ -54,7 +55,7 @@ enum Muscle: String, CaseIterable, Codable, Hashable {
     /// "Rear delts are due" vs "Chest is due".
     var isPlural: Bool {
         switch self {
-        case .chest, .upperBack: return false
+        case .chest, .upperBack, .lowerBack: return false
         default: return true
         }
     }
@@ -80,11 +81,22 @@ struct EquipmentType: Identifiable, Hashable {
 enum EquipmentCatalog {
     static let bodyweightID = "bodyweight"
 
-    static let all: [EquipmentType] = [
+    /// Machines you added yourself. Filled in from saved data when the app starts.
+    static var custom: [EquipmentType] = []
+    /// Ones you removed: no longer offered, but old workouts still know their names.
+    static var retired: [EquipmentType] = []
+
+    static var all: [EquipmentType] { builtIn + custom }
+
+    static let builtIn: [EquipmentType] = [
         EquipmentType(id: "dumbbells", name: "Dumbbells", category: .freeWeight, defaultIncrement: 5, loading: "Free weight"),
         EquipmentType(id: "barbell", name: "Barbell and plates", category: .freeWeight, defaultIncrement: 5, loading: "Free weight"),
+        EquipmentType(id: "ezBar", name: "EZ curl bar (bent bar)", category: .freeWeight, defaultIncrement: 5,
+                      loading: "Free weight · bar about 20 lb"),
         EquipmentType(id: "pullupBar", name: "Pull-up bar", category: .bodyweight, defaultIncrement: 5, loading: "Body weight"),
         EquipmentType(id: "dipStation", name: "Dip station", category: .bodyweight, defaultIncrement: 5, loading: "Body weight"),
+        EquipmentType(id: "backExtension", name: "Back extension bench", category: .bodyweight, defaultIncrement: 5,
+                      loading: "Body weight · hold a plate for more"),
         EquipmentType(id: "cable", name: "Cable station", category: .machine, defaultIncrement: 5, loading: "Weight stack"),
         EquipmentType(id: "latPulldown", name: "Lat pulldown", category: .machine, defaultIncrement: 5, loading: "Weight stack"),
         EquipmentType(id: "seatedRow", name: "Seated cable row", category: .machine, defaultIncrement: 5, loading: "Weight stack"),
@@ -107,9 +119,11 @@ enum EquipmentCatalog {
 
     static let bodyweight = EquipmentType(id: bodyweightID, name: "Body weight", category: .bodyweight, defaultIncrement: 5, loading: "Body weight")
 
-    private static let index: [String: EquipmentType] = Dictionary(uniqueKeysWithValues: (all + [bodyweight]).map { ($0.id, $0) })
+    private static let index: [String: EquipmentType] = Dictionary(uniqueKeysWithValues: (builtIn + [bodyweight]).map { ($0.id, $0) })
 
-    static func type(_ id: String) -> EquipmentType? { index[id] }
+    static func type(_ id: String) -> EquipmentType? {
+        index[id] ?? custom.first { $0.id == id } ?? retired.first { $0.id == id }
+    }
 
     /// What a typical commercial gym has. Used to pre-tick the list when adding a gym.
     static let commonIDs: [String] = [
@@ -146,7 +160,14 @@ enum ExerciseCatalog {
                     repLow: low, repHigh: high, compound: compound, starterWeight: start)
     }
 
-    static let all: [ExerciseDef] = [
+    /// Exercises you made yourself. Filled in from saved data when the app starts.
+    static var custom: [ExerciseDef] = []
+    /// Ones you removed: no longer offered, but old workouts still know their names.
+    static var retired: [ExerciseDef] = []
+
+    static var all: [ExerciseDef] { builtIn + custom }
+
+    static let builtIn: [ExerciseDef] = [
         // Chest
         ex("db_bench", "Dumbbell bench press", .chest, [.triceps, .delts], "dumbbells", "hpress", 8, 12, compound: true, start: 30),
         ex("bb_bench", "Barbell bench press", .chest, [.triceps, .delts], "barbell", "hpress", 6, 10, compound: true, start: 95),
@@ -161,9 +182,11 @@ enum ExerciseCatalog {
         ex("db_fly", "Dumbbell fly", .chest, [], "dumbbells", "fly", 10, 15, start: 15),
         // Triceps
         ex("pushdown", "Triceps pushdown", .triceps, [], "cable", "tri_ext", 10, 15, start: 30),
+        ex("one_arm_pulldown", "One-arm triceps pulldown", .triceps, [], "cable", "tri_ext", 10, 15, start: 15),
         ex("tri_machine", "Triceps extension machine", .triceps, [], "tricepsMachine", "tri_ext", 10, 15, start: 40),
         ex("db_overhead_ext", "Overhead dumbbell extension", .triceps, [], "dumbbells", "tri_oh", 10, 15, start: 25),
         ex("cable_overhead_ext", "Overhead cable extension", .triceps, [], "cable", "tri_oh", 10, 15, start: 25),
+        ex("ez_skullcrusher", "EZ-bar skull crusher", .triceps, [], "ezBar", "tri_oh", 8, 12, start: 30),
         ex("skullcrusher", "Skull crusher", .triceps, [], "barbell", "tri_oh", 8, 12, start: 40),
         ex("bench_dip", "Bench dip", .triceps, [.chest], "bodyweight", "dip", 10, 20),
         ex("dip", "Dip", .triceps, [.chest, .delts], "dipStation", "dip", 6, 12, compound: true),
@@ -177,6 +200,7 @@ enum ExerciseCatalog {
         ex("machine_row", "Row machine", .upperBack, [.lats, .biceps], "rowMachine", "row", 8, 12, compound: true, start: 70),
         ex("db_pullover", "Dumbbell pullover", .lats, [.chest], "dumbbells", "pullover", 10, 15, start: 30),
         ex("straight_arm", "Straight-arm pulldown", .lats, [], "cable", "pullover", 10, 15, start: 30),
+        ex("back_ext", "Back extension", .lowerBack, [.glutes, .hamstrings], "backExtension", "back_ext", 10, 15),
         ex("face_pull", "Face pull", .rearDelts, [.upperBack], "cable", "rear", 12, 15, start: 25),
         ex("reverse_fly", "Reverse dumbbell fly", .rearDelts, [.upperBack], "dumbbells", "rear", 12, 15, start: 10),
         ex("reverse_pec_deck", "Reverse pec deck", .rearDelts, [.upperBack], "pecDeck", "rear", 12, 15, start: 40),
@@ -184,6 +208,8 @@ enum ExerciseCatalog {
         ex("db_curl", "Dumbbell curl", .biceps, [], "dumbbells", "curl", 8, 12, start: 20),
         ex("bb_curl", "Barbell curl", .biceps, [], "barbell", "curl", 8, 12, start: 45),
         ex("cable_curl", "Cable curl", .biceps, [], "cable", "curl", 10, 15, start: 30),
+        ex("ez_preacher", "EZ-bar preacher curl", .biceps, [], "ezBar", "curl", 8, 12, start: 40),
+        ex("ez_curl", "EZ-bar curl", .biceps, [], "ezBar", "curl", 8, 12, start: 40),
         ex("preacher", "Preacher curl machine", .biceps, [], "preacherMachine", "curl", 10, 12, start: 40),
         ex("hammer_curl", "Hammer curl", .biceps, [], "dumbbells", "hammer", 10, 12, start: 20),
         ex("rope_hammer", "Rope hammer curl", .biceps, [], "cable", "hammer", 10, 15, start: 30),
@@ -218,57 +244,174 @@ enum ExerciseCatalog {
         ex("bicycle_crunch", "Bicycle crunch", .abs, [], "bodyweight", "abs_rot", 15, 25),
     ]
 
-    private static let index: [String: ExerciseDef] = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
+    private static let index: [String: ExerciseDef] = Dictionary(uniqueKeysWithValues: builtIn.map { ($0.id, $0) })
 
-    static func exercise(_ id: String) -> ExerciseDef? { index[id] }
+    static func exercise(_ id: String) -> ExerciseDef? {
+        index[id] ?? custom.first { $0.id == id } ?? retired.first { $0.id == id }
+    }
+
+    static func isRetired(_ id: String) -> Bool { retired.contains { $0.id == id } }
+
+    /// A deliberately light first weight for an exercise you made yourself.
+    static func starterWeight(equipment: String) -> Double {
+        switch equipment {
+        case EquipmentCatalog.bodyweightID, "pullupBar", "dipStation": return 0
+        case "dumbbells": return 10
+        case "barbell": return 45
+        default: return 20
+        }
+    }
 }
 
-/// The three rotating days.
-enum DayType: String, CaseIterable, Codable, Hashable {
-    case chestTriceps, backBiceps, shouldersLegs
+/// One exercise position in a day. `key` stays the same when the day is reordered, so the app
+/// still remembers what you swapped in for that position at each gym.
+struct DaySlot: Codable, Hashable {
+    var key: String
+    var exercise: String
+}
 
-    var title: String {
-        switch self {
-        case .chestTriceps: return "Chest & triceps"
-        case .backBiceps: return "Back & biceps"
-        case .shouldersLegs: return "Shoulders & legs"
-        }
+/// One day of the routine, for example "Chest & triceps". Days rotate in order and can be edited.
+struct DayType: Codable, Hashable, Identifiable {
+    var id: String
+    var title: String
+    var items: [DaySlot]
+    /// Which positions make up the 20-minute version. nil = worked out from the exercises.
+    var quick: [Int]?
+
+    init(id: String = "day-" + UUID().uuidString, title: String, exercises: [String], quick: [Int]? = nil) {
+        self.id = id
+        self.title = title
+        self.items = exercises.enumerated().map { DaySlot(key: String($0.offset), exercise: $0.element) }
+        self.quick = quick
     }
 
-    var number: Int { (DayType.allCases.firstIndex(of: self) ?? 0) + 1 }
+    var rawValue: String { id }
 
+    /// Default exercise for each position of the full workout, in order.
+    var slots: [String] { items.map(\.exercise) }
+
+    static var allCases: [DayType] { Routine.days }
+
+    var number: Int { (Routine.days.firstIndex { $0.id == id } ?? 0) + 1 }
+
+    /// The day after this one. A day that is no longer in the routine leads back to the first day.
     var next: DayType {
-        let all = DayType.allCases
-        return all[((all.firstIndex(of: self) ?? 0) + 1) % all.count]
+        let all = Routine.days
+        guard let index = all.firstIndex(where: { $0.id == id }) else { return all.first ?? self }
+        return all[(index + 1) % all.count]
     }
 
+    /// The muscle groups this day is mainly about (two or more exercises), in order of appearance.
     var groups: [MuscleGroup] {
-        switch self {
-        case .chestTriceps: return [.chest, .triceps]
-        case .backBiceps: return [.back, .biceps]
-        case .shouldersLegs: return [.shoulders, .legs]
+        var counts: [MuscleGroup: Int] = [:]
+        var order: [MuscleGroup] = []
+        for id in slots {
+            guard let group = ExerciseCatalog.exercise(id)?.muscle.group else { continue }
+            if counts[group] == nil { order.append(group) }
+            counts[group, default: 0] += 1
         }
+        let main = order.filter { (counts[$0] ?? 0) >= 2 }
+        return main.isEmpty ? order : main
     }
 
-    /// Default exercise for each slot of the full workout, in order.
-    var slots: [String] {
-        switch self {
-        case .chestTriceps: return ["db_bench", "incline_db_press", "cable_fly", "pushdown", "db_overhead_ext", "bench_dip"]
-        case .backBiceps: return ["lat_pulldown", "cable_row", "db_row", "face_pull", "db_curl", "hammer_curl"]
-        case .shouldersLegs: return ["db_ohp", "lateral_raise", "leg_press", "leg_curl", "leg_ext", "calf_raise_machine"]
-        }
-    }
-
-    /// Which slots make up the 20-minute version (biggest moves, both muscle groups).
+    /// Which positions make up the 20-minute version: up to four, taking turns between the main muscle groups.
     var quickSlotIndexes: [Int] {
-        switch self {
-        case .chestTriceps: return [0, 1, 3, 4]
-        case .backBiceps: return [0, 1, 4, 5]
-        case .shouldersLegs: return [0, 2, 1, 3]
+        if let quick, quick.allSatisfy({ items.indices.contains($0) }) { return quick }
+        var byGroup: [[Int]] = groups.map { group in
+            items.indices.filter { ExerciseCatalog.exercise(items[$0].exercise)?.muscle.group == group }
         }
+        var picks: [Int] = []
+        while picks.count < 4, byGroup.contains(where: { !$0.isEmpty }) {
+            for index in byGroup.indices where picks.count < 4 && !byGroup[index].isEmpty {
+                picks.append(byGroup[index].removeFirst())
+            }
+        }
+        for index in items.indices where picks.count < 4 && !picks.contains(index) { picks.append(index) }
+        return picks
     }
 
-    func slotID(_ index: Int) -> String { "\(rawValue).\(index)" }
+    func slotID(_ index: Int) -> String { "\(id).\(items[index].key)" }
+
+    // Editing. Any change to the list drops the hand-picked 20-minute version.
+
+    mutating func add(_ exercise: String) {
+        items.append(DaySlot(key: String(UUID().uuidString.prefix(8)), exercise: exercise))
+        quick = nil
+    }
+
+    mutating func remove(at index: Int) {
+        items.remove(at: index)
+        quick = nil
+    }
+
+    mutating func move(from source: Int, to destination: Int) {
+        let item = items.remove(at: source)
+        items.insert(item, at: min(destination, items.count))
+        quick = nil
+    }
+
+    // The original three days.
+    static let chestTriceps = DayType(id: "chestTriceps", title: "Chest & triceps",
+        exercises: ["db_bench", "incline_db_press", "cable_fly", "pushdown", "db_overhead_ext", "bench_dip"], quick: [0, 1, 3, 4])
+    static let backBiceps = DayType(id: "backBiceps", title: "Back & biceps",
+        exercises: ["lat_pulldown", "cable_row", "db_row", "face_pull", "db_curl", "hammer_curl"], quick: [0, 1, 4, 5])
+    static let shouldersLegs = DayType(id: "shouldersLegs", title: "Shoulders & legs",
+        exercises: ["db_ohp", "lateral_raise", "leg_press", "leg_curl", "leg_ext", "calf_raise_machine"], quick: [0, 2, 1, 3])
+}
+
+/// A ready-made routine to start from.
+struct RoutinePreset: Identifiable {
+    let id: String
+    let name: String
+    let summary: String
+    let days: [DayType]
+}
+
+enum Presets {
+    static let classic = RoutinePreset(id: "classic", name: "Chest & tri · Back & bi · Shoulders & legs",
+        summary: "3 days. Two muscle groups each day.",
+        days: [.chestTriceps, .backBiceps, .shouldersLegs])
+
+    static let pushPullLegs = RoutinePreset(id: "ppl", name: "Push · Pull · Legs",
+        summary: "3 days. Pushing muscles, pulling muscles, then legs.",
+        days: [
+            DayType(id: "push", title: "Push",
+                    exercises: ["db_bench", "incline_db_press", "db_ohp", "lateral_raise", "pushdown", "db_overhead_ext"]),
+            DayType(id: "pull", title: "Pull",
+                    exercises: ["lat_pulldown", "cable_row", "db_row", "face_pull", "db_curl", "hammer_curl"]),
+            DayType(id: "legs", title: "Legs",
+                    exercises: ["leg_press", "db_rdl", "leg_ext", "leg_curl", "db_lunge", "calf_raise_machine"]),
+        ])
+
+    static let upperLower = RoutinePreset(id: "upperLower", name: "Upper · Lower",
+        summary: "2 days. Upper body one day, lower body the next.",
+        days: [
+            DayType(id: "upper", title: "Upper body",
+                    exercises: ["db_bench", "lat_pulldown", "db_ohp", "cable_row", "db_curl", "pushdown"]),
+            DayType(id: "lower", title: "Lower body",
+                    exercises: ["leg_press", "db_rdl", "leg_ext", "leg_curl", "goblet_squat", "calf_raise_machine"]),
+        ])
+
+    static let fullBody = RoutinePreset(id: "fullBody", name: "Full body A · B",
+        summary: "2 days. Everything each time, with different exercises.",
+        days: [
+            DayType(id: "fullA", title: "Full body A",
+                    exercises: ["leg_press", "db_bench", "lat_pulldown", "db_ohp", "db_curl", "pushdown"]),
+            DayType(id: "fullB", title: "Full body B",
+                    exercises: ["goblet_squat", "incline_db_press", "cable_row", "db_rdl", "lateral_raise", "hammer_curl"]),
+        ])
+
+    static let all: [RoutinePreset] = [classic, pushPullLegs, upperLower, fullBody]
+}
+
+/// The routine in use: the days, in the order they rotate. Filled in from saved data when the app starts.
+enum Routine {
+    static var days: [DayType] = Presets.classic.days
+
+    /// A day by id: from the routine in use, else from the ready-made ones (so old workouts keep their names).
+    static func day(_ id: String) -> DayType? {
+        days.first { $0.id == id } ?? Presets.all.flatMap(\.days).first { $0.id == id }
+    }
 }
 
 enum AbsAddOn {

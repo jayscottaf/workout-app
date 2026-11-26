@@ -284,6 +284,16 @@ final class WalkthroughTests: XCTestCase {
         app.tabBars.buttons["Progress"].tap()
         XCTAssertTrue(app.staticTexts["ESTIMATED STRENGTH"].waitForExistence(timeout: 10))
         shot("24-chart-dates")
+        // Tapping the newest point opens the workout it came from.
+        let chart = app.otherElements["strengthChart"].exists ? app.otherElements["strengthChart"] : app.images["strengthChart"]
+        if chart.exists {
+            chart.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+            XCTAssertTrue(app.buttons["summaryDone"].waitForExistence(timeout: 5))
+            shot("24b-point-opens-workout")
+            app.buttons["summaryDone"].tap()
+        } else {
+            XCTFail("Strength chart not found")
+        }
         let today = app.buttons.matching(NSPredicate(format: "label CONTAINS '2 workouts'")).firstMatch
         for _ in 0..<6 where !today.isHittable { app.swipeUp() }
         shot("25-calendar-two-workouts")

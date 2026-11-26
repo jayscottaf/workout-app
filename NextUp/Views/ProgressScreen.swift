@@ -180,9 +180,23 @@ struct ProgressScreen: View {
                     }
                 }
                 .frame(height: 140)
+                // Tap a point to open the workout it came from.
+                .chartOverlay { proxy in
+                    GeometryReader { geometry in
+                        Rectangle().fill(Color.clear).contentShape(Rectangle())
+                            .onTapGesture { location in
+                                guard let plot = proxy.plotFrame,
+                                      let value = proxy.value(atX: location.x - geometry[plot].origin.x, as: Double.self),
+                                      !points.isEmpty else { return }
+                                let index = min(max(Int(value.rounded()), 0), points.count - 1)
+                                opened = finished.first { $0.startedAt == points[index].date }
+                            }
+                    }
+                }
                 .accessibilityLabel("Chart of estimated strength for \(chosen.label) over \(points.count) sessions")
+                .accessibilityIdentifier("strengthChart")
 
-                Text("The most you could likely lift once, worked out from your sets.")
+                Text("The most you could likely lift once, worked out from your sets. Tap a point to open that workout.")
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
             }

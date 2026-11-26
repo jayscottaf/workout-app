@@ -4,6 +4,8 @@ import Charts
 
 private struct StrengthPoint: Identifiable {
     let id = UUID()
+    /// Position in the series. The chart spaces sessions evenly, so several on one day stay readable.
+    var index = 0
     let date: Date
     let value: Double
 }
@@ -22,6 +24,8 @@ struct ProgressScreen: View {
     @State private var selectedKey: String?
     @State private var month = Date()
     @State private var opened: Workout?
+    /// Set when a calendar day has more than one workout, to pick which to open.
+    @State private var dayChoices: [Workout] = []
 
     var body: some View {
         let finished = Store.finished(workouts)
@@ -69,6 +73,17 @@ struct ProgressScreen: View {
             .padding(.bottom, 24)
         }
         .screen()
+        .confirmationDialog("Which workout?", isPresented: Binding(
+            get: { !dayChoices.isEmpty }, set: { if !$0 { dayChoices = [] } }), titleVisibility: .visible) {
+            ForEach(dayChoices) { workout in
+                let sets = workout.entries.reduce(0) { $0 + $1.sets.count }
+                Button("\(workout.title) · \(workout.startedAt.formatted(date: .omitted, time: .shortened)) · \(sets) \(sets == 1 ? "set" : "sets")") {
+                    dayChoices = []
+                    opened = workout
+                }
+            }
+            Button("Cancel", role: .cancel) { dayChoices = [] }
+        }
         .sheet(item: $opened) { workout in
             SummaryView(workout: workout, isFresh: false) { opened = nil }
         }
@@ -103,7 +118,8 @@ struct ProgressScreen: View {
     private func strengthCard(finished: [Workout], history: History) -> some View {
         let options = liftOptions(finished)
         if let chosen = options.first(where: { $0.id == selectedKey }) ?? options.first {
-            let points = Stats.strengthSeries(history.sessions(for: chosen.id)).map { StrengthPoint(date: $0.date, value: $0.value) }
+            let points = Stats.strengthSeries(history.sessions(for: chosen.id)).enumerated().map { StrengthPoint(index: $0.offset, date: $0.element.date, value: $0.element.value) }
+            let ticks = Self.dateTicks(points)
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top) {
                     CapsLabel("Estimated strength")
@@ -135,19 +151,26 @@ struct ProgressScreen: View {
                 }
 
                 Chart(points) { point in
-                    LineMark(x: .value("Date", point.date), y: .value("Estimated max", point.value))
+                    LineMark(x: .value("Session", point.index), y: .value("Estimated max", point.value))
                         .foregroundStyle(Theme.volt)
                         .interpolationMethod(.monotone)
                         .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-                    PointMark(x: .value("Date", point.date), y: .value("Estimated max", point.value))
+                    PointMark(x: .value("Session", point.index), y: .value("Estimated max", point.value))
                         .foregroundStyle(Theme.volt)
                         .symbolSize(28)
                 }
                 .chartYScale(domain: .automatic(includesZero: false))
+                .chartXScale(domain: -0.6...(Double(max(points.count - 1, 0)) + 0.6))
                 .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                    // One label per day, at that day's first session, so dates never repeat or overlap.
+                    AxisMarks(values: ticks) { value in
                         AxisGridLine().foregroundStyle(Theme.line)
-                        AxisValueLabel(format: .dateTime.month(.abbreviated).day()).foregroundStyle(Theme.muted)
+                        AxisValueLabel(anchor: .top) {
+                            if let i = value.as(Int.self), points.indices.contains(i) {
+                                Text(points[i].date.formatted(.dateTime.month(.abbreviated).day()))
+                                    .foregroundStyle(Theme.muted)
+                            }
+                        }
                     }
                 }
                 .chartYAxis {
@@ -170,10 +193,26 @@ struct ProgressScreen: View {
     private func changeText(first: StrengthPoint, latest: StrengthPoint, count: Int) -> String {
         guard count > 1 else { return "first session logged" }
         let change = Int((latest.value - first.value).rounded())
-        let since = first.date.formatted(.dateTime.month(.abbreviated).day())
+        let since = Calendar.current.isDate(first.date, inSameDayAs: latest.date)
+            ? "your first session"
+            : first.date.formatted(.dateTime.month(.abbreviated).day())
         if change > 0 { return "up \(change) lb since \(since)" }
         if change < 0 { return "down \(-change) lb since \(since)" }
         return "level since \(since)"
+    }
+
+    /// Indexes to label on the chart: the first session of each day, at most 4, spread out.
+    private static func dateTicks(_ points: [StrengthPoint]) -> [Int] {
+        let calendar = Calendar.current
+        var firsts: [Int] = []
+        var lastDay: Date?
+        for point in points {
+            let day = calendar.startOfDay(for: point.date)
+            if day != lastDay { firsts.append(point.index); lastDay = day }
+        }
+        guard firsts.count > 4 else { return firsts }
+        let step = Double(firsts.count - 1) / 3
+        return (0...3).map { firsts[Int((Double($0) * step).rounded())] }
     }
 
     // MARK: volume
@@ -279,7 +318,7 @@ struct ProgressScreen: View {
                 }
                 ForEach(Array(days.enumerated()), id: \.offset) { _, day in
                     if let day {
-                        dayCell(day, workout: lifting[day]?.first, hasCardio: cardio.contains(day), calendar: calendar)
+                        dayCell(day, workouts: lifting[day] ?? [], hasCardio: cardio.contains(day), calendar: calendar)
                     } else {
                         Color.clear.frame(height: 34)
                     }
@@ -305,21 +344,36 @@ struct ProgressScreen: View {
     }
 
     @ViewBuilder
-    private func dayCell(_ day: Date, workout: Workout?, hasCardio: Bool, calendar: Calendar) -> some View {
+    private func dayCell(_ day: Date, workouts: [Workout], hasCardio: Bool, calendar: Calendar) -> some View {
         let number = calendar.component(.day, from: day)
         let isToday = calendar.isDateInToday(day)
         let isFuture = day > Date()
-        if let workout {
-            Button { opened = workout } label: {
+        if let workout = workouts.first {
+            Button {
+                // More than one workout that day: ask which one, oldest first.
+                if workouts.count > 1 { dayChoices = workouts.sorted { $0.startedAt < $1.startedAt } } else { opened = workout }
+            } label: {
                 Text("\(number)")
                     .font(.system(size: 13, weight: .heavy))
                     .monospacedDigit()
                     .foregroundStyle(Theme.onVolt)
                     .frame(maxWidth: .infinity, minHeight: 34)
                     .background(Theme.volt, in: Capsule())
+                    .overlay(alignment: .topTrailing) {
+                        if workouts.count > 1 {
+                            Text("\(workouts.count)")
+                                .font(.system(size: 9, weight: .heavy))
+                                .foregroundStyle(Theme.volt)
+                                .frame(width: 15, height: 15)
+                                .background(Theme.bg, in: Circle())
+                                .offset(x: 2, y: -3)
+                        }
+                    }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(day.shortDay): \(workout.title). Open workout")
+            .accessibilityLabel(workouts.count > 1
+                ? "\(day.shortDay): \(workouts.count) workouts. Choose one to open"
+                : "\(day.shortDay): \(workout.title). Open workout")
         } else {
             Text("\(number)")
                 .font(.system(size: 13, weight: hasCardio ? .heavy : .semibold))

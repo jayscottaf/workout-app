@@ -263,6 +263,37 @@ final class WalkthroughTests: XCTestCase {
         shot("23-new-equipment-in-workout")
     }
 
+    /// Two workouts on one day: the calendar asks which to open, and the chart's dates do not repeat.
+    @MainActor
+    func testTwoWorkoutsOneDay() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demoData"]
+        app.launch()
+        for _ in 0..<2 {
+            XCTAssertTrue(app.buttons["startWorkout"].waitForExistence(timeout: 30))
+            app.buttons["startWorkout"].tap()
+            XCTAssertTrue(app.buttons["logSet"].waitForExistence(timeout: 10))
+            app.buttons["logSet"].tap()
+            app.buttons["Skip rest"].tap()
+            app.buttons["finishWorkout"].tap()
+            let confirm = app.buttons["Finish workout"]
+            if confirm.waitForExistence(timeout: 3) { confirm.tap() }
+            XCTAssertTrue(app.buttons["summaryDone"].waitForExistence(timeout: 10))
+            app.buttons["summaryDone"].tap()
+        }
+        app.tabBars.buttons["Progress"].tap()
+        XCTAssertTrue(app.staticTexts["ESTIMATED STRENGTH"].waitForExistence(timeout: 10))
+        shot("24-chart-dates")
+        let today = app.buttons.matching(NSPredicate(format: "label CONTAINS '2 workouts'")).firstMatch
+        for _ in 0..<6 where !today.isHittable { app.swipeUp() }
+        shot("25-calendar-two-workouts")
+        today.tap()
+        XCTAssertTrue(app.staticTexts["Which workout?"].waitForExistence(timeout: 5))
+        shot("26-which-workout")
+        app.buttons.matching(NSPredicate(format: "label CONTAINS ' set'")).firstMatch.tap()
+        XCTAssertTrue(app.buttons["summaryDone"].waitForExistence(timeout: 5))
+    }
+
     private func shot(_ name: String) {
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name

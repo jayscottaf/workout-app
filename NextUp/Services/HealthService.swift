@@ -117,12 +117,13 @@ final class HealthService: ObservableObject {
     ]
 
     private func fetchCardio() async throws -> [CardioItem] {
-        let start = Calendar.current.date(byAdding: .day, value: -120, to: Date())
+        // Two years back, so a streak kept going by cardio isn't cut short by a short window.
+        let start = Calendar.current.date(byAdding: .year, value: -2, to: Date())
         let kinds = NSCompoundPredicate(orPredicateWithSubpredicates:
             Self.cardioTypes.keys.map { HKQuery.predicateForWorkouts(with: $0) })
         let dates = HKQuery.predicateForSamples(withStart: start, end: nil, options: [])
         let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [kinds, dates])
-        let samples = try await run(type: HKObjectType.workoutType(), predicate: predicate, limit: 300)
+        let samples = try await run(type: HKObjectType.workoutType(), predicate: predicate, limit: 2_000)
         let distances = [HKQuantityType(.distanceWalkingRunning), HKQuantityType(.distanceCycling), HKQuantityType(.distanceSwimming)]
         return samples.compactMap { $0 as? HKWorkout }.map { workout in
             let miles = distances.lazy

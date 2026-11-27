@@ -21,6 +21,8 @@ private struct LiftOption: Identifiable, Hashable {
 struct ProgressScreen: View {
     @EnvironmentObject private var health: HealthService
     @Query(sort: \Workout.startedAt, order: .reverse) private var workouts: [Workout]
+    @Query(sort: \Gym.createdAt) private var gyms: [Gym]
+    @AppStorage("currentGymID") private var currentGymID = ""
     @State private var selectedKey: String?
     @State private var month = Date()
     @State private var opened: Workout?
@@ -49,6 +51,7 @@ struct ProgressScreen: View {
                 } else {
                     strengthCard(finished: finished, history: history)
                     volumeCard(history: history)
+                    missedCard(history: history)
                     recordsCard(finished: finished)
                 }
                 calendarCard(finished: finished)
@@ -237,6 +240,10 @@ struct ProgressScreen: View {
         let top = max(sets.values.max() ?? 0, 1)
         return VStack(alignment: .leading, spacing: 10) {
             CapsLabel("Sets this week, by muscle group")
+            Text("Helping muscles count half: a bench press set adds half a set to triceps and shoulders.")
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.muted)
+                .fixedSize(horizontal: false, vertical: true)
             VStack(spacing: 8) {
                 ForEach(groups, id: \.self) { group in
                     let count = sets[group] ?? 0
@@ -252,18 +259,74 @@ struct ProgressScreen: View {
                             }
                         }
                         .frame(height: 8)
-                        Text("\(count)")
+                        Text(Self.setsNumber(count))
                             .font(.system(size: 13))
                             .monospacedDigit()
                             .foregroundStyle(Theme.muted)
                             .frame(width: 22, alignment: .trailing)
                     }
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(group.title): \(count) sets")
+                    .accessibilityLabel("\(group.title): \(Self.setsNumber(count)) sets")
                 }
             }
         }
         .card()
+    }
+
+    /// Muscles with no main sets yet this week, longest since trained first, with an exercise this gym has.
+    @ViewBuilder
+    private func missedCard(history: History) -> some View {
+        let gym = gyms.first { $0.id.uuidString == currentGymID } ?? gyms.first
+        let lastTrained = history.lastTrained()
+        let missed = MuscleMap.missedThisWeek(history: history, gym: gym?.info).sorted {
+            (lastTrained[$0.muscle] ?? .distantPast) < (lastTrained[$1.muscle] ?? .distantPast)
+        }
+        if !missed.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                CapsLabel("Still to hit this week")
+                FlowLayout(spacing: 6) {
+                    ForEach(missed, id: \.title) { item in
+                        Text(item.title)
+                            .font(.system(size: 13, weight: .semibold))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .overlay(Capsule().strokeBorder(Theme.line, lineWidth: 1))
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("No sets yet this week for " + missed.map { $0.title.lowercased() }.joined(separator: ", "))
+                let ideas = missed.filter { $0.suggestion != nil }.prefix(3)
+                if !ideas.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(ideas), id: \.title) { item in
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(item.title)
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(Theme.muted)
+                                    .frame(width: 112, alignment: .leading)
+                                Text("Try \(item.suggestion!.name)")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 0)
+                            }
+                            .accessibilityElement(children: .combine)
+                        }
+                    }
+                }
+                Text(gym.map { "Ideas use what \($0.name) has. Add one from the + button during a workout." }
+                     ?? "Add one from the + button during a workout.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .card()
+            .accessibilityIdentifier("stillToHit")
+        }
+    }
+
+    /// "3", or "4.5" when helper sets add a half.
+    static func setsNumber(_ value: Double) -> String {
+        value.rounded() == value ? String(Int(value)) : String(format: "%.1f", value)
     }
 
     // MARK: records

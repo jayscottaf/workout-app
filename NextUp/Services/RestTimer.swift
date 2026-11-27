@@ -55,15 +55,18 @@ final class RestTimer: ObservableObject {
 
     /// A workout is open: the Lock Screen card stays up between rests.
     private var inWorkout = false
+    /// When the open workout started, so the Lock Screen can count up the workout time between sets.
+    private var workoutStart: Date?
 
     init() {}
 
     /// At launch: keep the Lock Screen card if a workout is still in progress, else clear any left over.
-    func resume(workoutTitle: String?) {
+    func resume(workoutTitle: String?, started: Date? = nil) {
         guard liveActivityEnabled else { return }
         if let workoutTitle {
             inWorkout = true
             title = workoutTitle
+            workoutStart = started
             RestLiveActivity.adopt()
         } else {
             RestLiveActivity.end()
@@ -71,9 +74,10 @@ final class RestTimer: ObservableObject {
     }
 
     /// The workout screen is open (the app is in front, so iOS lets it put up the Lock Screen card).
-    func beginWorkout(title: String, next: String) {
+    func beginWorkout(title: String, next: String, started: Date? = nil) {
         inWorkout = true
         self.title = title
+        workoutStart = started
         self.next = next
         if !isRunning { showBetweenSets() }
     }
@@ -81,6 +85,7 @@ final class RestTimer: ObservableObject {
     /// The workout was finished or discarded.
     func endWorkout() {
         inWorkout = false
+        workoutStart = nil
         stop()
         if liveActivityEnabled { RestLiveActivity.end() }
     }
@@ -174,12 +179,12 @@ final class RestTimer: ObservableObject {
     private func showBetweenSets() {
         guard liveActivityEnabled else { return }
         let now = Date()
-        RestLiveActivity.show(start: now, end: now, title: title, next: next, resting: false)
+        RestLiveActivity.show(start: now, end: now, title: title, next: next, resting: false, workoutStart: workoutStart)
     }
 
     private func showLiveActivity() {
         guard liveActivityEnabled, let endDate else { return }
-        RestLiveActivity.show(start: endDate.addingTimeInterval(-total), end: endDate, title: title, next: next)
+        RestLiveActivity.show(start: endDate.addingTimeInterval(-total), end: endDate, title: title, next: next, workoutStart: workoutStart)
     }
 
     /// So the phone still buzzes if the app is in the background when rest ends.

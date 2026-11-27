@@ -22,7 +22,7 @@ struct NextUpApp: App {
         Store.seedIfNeeded(ModelContext(container), demo: demo)
         // The Lock Screen card stays while a workout is in progress (even if the app was closed), else it is cleared.
         let open = try? ModelContext(container).fetch(FetchDescriptor<Workout>(predicate: #Predicate { $0.endedAt == nil })).first
-        RestTimer.shared.resume(workoutTitle: open?.title)
+        RestTimer.shared.resume(workoutTitle: open?.title, started: open?.startedAt)
         // Your routine (the days and their exercises) is read before anything plans a workout.
         _ = RoutineStore.shared
         // Exercises and machines you made yourself join the built-in lists.

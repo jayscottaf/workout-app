@@ -70,13 +70,17 @@ extension RestActivityAttributes.ContentState {
     var isResting: Bool { resting ?? true }
 }
 
-/// "1:27" counting down, or "Go" once rest is over.
+/// "1:27" counting down while resting, "Go" once rest is over, and the workout time counting up between sets.
 private struct Countdown: View {
     let state: RestActivityAttributes.ContentState
     let isOver: Bool
 
     var body: some View {
-        if isOver || state.endDate <= state.startDate {
+        if !state.isResting, let start = state.workoutStart {
+            Text(start, style: .timer)
+                .monospacedDigit()
+                .multilineTextAlignment(.trailing)
+        } else if isOver || state.endDate <= state.startDate {
             Text("Go")
         } else {
             Text(timerInterval: state.startDate...state.endDate, countsDown: true)
@@ -105,10 +109,17 @@ private struct LockScreenView: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                Countdown(state: state, isOver: isOver)
-                    .font(.system(size: 40, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: 130, alignment: .trailing)
+                VStack(alignment: .trailing, spacing: 0) {
+                    Countdown(state: state, isOver: isOver)
+                        .font(.system(size: 40, weight: .heavy, design: .rounded))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: 140, alignment: .trailing)
+                    if !state.isResting, state.workoutStart != nil {
+                        Text("workout time")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Look.muted)
+                    }
+                }
             }
             if !isOver {
                 ProgressView(timerInterval: state.startDate...state.endDate, countsDown: true,

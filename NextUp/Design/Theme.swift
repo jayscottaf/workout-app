@@ -17,6 +17,9 @@ enum Theme {
     static let onVolt = Color(hex: 0x0A0C0B)
     static let onVoltSoft = Color(hex: 0x2A3312)
     static let blue = Color(hex: 0x6FB6FF)
+    /// Heads-up color: two exercises doing the same job.
+    static let amber = Color(hex: 0xF5B94A)
+    static let amberDim = Color(hex: 0x2A2110)
     static let blueDim = Color(hex: 0x16263A)
 
     static func rounded(_ size: CGFloat, _ weight: Font.Weight = .heavy) -> Font {
@@ -167,4 +170,49 @@ extension Date {
     var longDay: String { formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) }
     /// "Thu, Nov 12"
     var shortDay: String { formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()) }
+}
+
+/// Lays children out left to right, wrapping onto new lines. Used for small tag rows.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(proposal: proposal, subviews: subviews)
+        let width = rows.map { $0.width }.max() ?? 0
+        let height = rows.reduce(0) { $0 + $1.height } + spacing * CGFloat(max(rows.count - 1, 0))
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(proposal: ProposedViewSize(width: bounds.width, height: nil), subviews: subviews) {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = subviews[index].sizeThatFits(.unspecified)
+                subviews[index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    private struct Row { var indices: [Int] = []; var width: CGFloat = 0; var height: CGFloat = 0 }
+
+    private func arrange(proposal: ProposedViewSize, subviews: Subviews) -> [Row] {
+        let maxWidth = proposal.width ?? .infinity
+        var rows: [Row] = [Row()]
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            let needed = rows[rows.count - 1].indices.isEmpty ? size.width : rows[rows.count - 1].width + spacing + size.width
+            if needed > maxWidth, !rows[rows.count - 1].indices.isEmpty {
+                rows.append(Row())
+            }
+            var row = rows[rows.count - 1]
+            row.width = row.indices.isEmpty ? size.width : row.width + spacing + size.width
+            row.height = max(row.height, size.height)
+            row.indices.append(index)
+            rows[rows.count - 1] = row
+        }
+        return rows.filter { !$0.indices.isEmpty }
+    }
 }

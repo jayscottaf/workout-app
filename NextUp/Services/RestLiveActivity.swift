@@ -8,9 +8,10 @@ enum RestLiveActivity {
     private static var current: Activity<RestActivityAttributes>?
 
     /// A rest countdown, or (`resting` false) the card shown between sets.
-    static func show(start: Date, end: Date, title: String, next: String, resting: Bool = true) {
+    static func show(start: Date, end: Date, title: String, next: String, resting: Bool = true, workoutStart: Date? = nil) {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        let state = RestActivityAttributes.ContentState(startDate: start, endDate: end, next: next, resting: resting)
+        let state = RestActivityAttributes.ContentState(startDate: start, endDate: end, next: next, resting: resting,
+                                                        workoutStart: workoutStart)
         // "Stale" at the end of rest: iOS then redraws it as "Rest is over" even if the app is asleep.
         let content = ActivityContent(state: state, staleDate: resting ? end : nil)
         if let current, current.activityState == .active || current.activityState == .stale {

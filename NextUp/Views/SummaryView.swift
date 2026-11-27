@@ -13,6 +13,8 @@ struct SummaryView: View {
     @State private var confirmDelete = false
     @State private var appeared = false
     @State private var editing = false
+    /// The muscle row that is open to show its parts.
+    @State private var openMuscle: Muscle?
 
     var body: some View {
         let records = workout.prSets
@@ -54,6 +56,8 @@ struct SummaryView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .card()
+
+                musclesCard
 
                 if isFresh { weekCard(status) }
 
@@ -141,6 +145,75 @@ struct SummaryView: View {
             Button("Keep it", role: .cancel) {}
         }
     }
+
+    /// Sets per muscle: as the main target, and as a helper (for example biceps on a row).
+    @ViewBuilder
+    private var musclesCard: some View {
+        let items = workout.sortedEntries.map { (exerciseID: $0.exerciseID, sets: $0.completedSets.count) }
+        let work = MuscleMap.work(items)
+        let main = work.filter { $0.mainSets > 0 }
+        let helpersOnly = work.filter { $0.mainSets == 0 }
+        if !work.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                CapsLabel("Muscles worked")
+                ForEach(main, id: \.muscle) { item in
+                    let split = MuscleParts.hasParts(item.muscle)
+                    let open = openMuscle == item.muscle
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { openMuscle = open ? nil : item.muscle }
+                    } label: {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(item.muscle.title).font(.system(size: 15, weight: .semibold))
+                        if split {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 10, weight: .heavy))
+                                .foregroundStyle(Theme.muted)
+                                .rotationEffect(.degrees(open ? 180 : 0))
+                        }
+                        Spacer(minLength: 8)
+                        Text(Self.setsText(item.mainSets))
+                            .font(.system(size: 15, weight: .bold))
+                            .monospacedDigit()
+                        if item.helperSets > 0 {
+                            Text("+ \(item.helperSets) helping")
+                                .font(.system(size: 13))
+                                .monospacedDigit()
+                                .foregroundStyle(Theme.muted)
+                        }
+                    }
+                    .frame(minHeight: 28)
+                    .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .allowsHitTesting(split)
+                    .accessibilityRemoveTraits(split ? [] : .isButton)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityHint(split ? (open ? "Hides its parts" : "Shows sets for each part") : "")
+                    .accessibilityIdentifier("worked-\(item.muscle.rawValue)")
+                    if open {
+                        Text(MuscleParts.sets(items, muscle: item.muscle)
+                            .map { "\($0.part) \($0.sets)" }.joined(separator: " · "))
+                            .font(.system(size: 13))
+                            .monospacedDigit()
+                            .foregroundStyle(Theme.muted)
+                            .padding(.leading, 12)
+                            .accessibilityIdentifier("workedParts")
+                    }
+                }
+                if !helpersOnly.isEmpty {
+                    Text("Also helped: " + helpersOnly.map { "\($0.muscle.title) \($0.helperSets)" }.joined(separator: " · "))
+                        .font(.system(size: 13))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .card()
+            .accessibilityIdentifier("musclesWorked")
+        }
+    }
+
+    private static func setsText(_ count: Int) -> String { count == 1 ? "1 set" : "\(count) sets" }
 
     private func keepGoing() {
         if isFresh {

@@ -39,10 +39,10 @@ enum Muscle: String, CaseIterable, Codable, Hashable {
         case .chest: return "Chest"
         case .triceps: return "Triceps"
         case .lats: return "Lats"
-        case .upperBack: return "Upper back"
+        case .upperBack: return "Mid back"
         case .lowerBack: return "Lower back"
         case .biceps: return "Biceps"
-        case .delts: return "Shoulders"
+        case .delts: return "Delts"
         case .rearDelts: return "Rear delts"
         case .quads: return "Quads"
         case .hamstrings: return "Hamstrings"
@@ -101,6 +101,7 @@ enum EquipmentCatalog {
         EquipmentType(id: "latPulldown", name: "Lat pulldown", category: .machine, defaultIncrement: 5, loading: "Weight stack"),
         EquipmentType(id: "seatedRow", name: "Seated cable row", category: .machine, defaultIncrement: 5, loading: "Weight stack"),
         EquipmentType(id: "rowMachine", name: "Row machine", category: .machine, defaultIncrement: 5, loading: "Plate-loaded"),
+        EquipmentType(id: "tBarRow", name: "T-bar row", category: .machine, defaultIncrement: 10, loading: "Plate-loaded"),
         EquipmentType(id: "assistedPullup", name: "Assisted pull-up machine", category: .machine, defaultIncrement: 10, loading: "Weight stack"),
         EquipmentType(id: "chestPress", name: "Chest press machine", category: .machine, defaultIncrement: 10, loading: "Weight stack"),
         EquipmentType(id: "pecDeck", name: "Pec deck", category: .machine, defaultIncrement: 10, loading: "Weight stack"),
@@ -194,10 +195,13 @@ enum ExerciseCatalog {
         ex("lat_pulldown", "Lat pulldown", .lats, [.biceps, .upperBack], "latPulldown", "vpull", 8, 12, compound: true, start: 80),
         ex("pullup", "Pull-up", .lats, [.biceps, .upperBack], "pullupBar", "vpull", 5, 10, compound: true),
         ex("assisted_pullup", "Assisted pull-up", .lats, [.biceps, .upperBack], "assistedPullup", "vpull", 6, 10, compound: true, start: 60),
-        ex("cable_row", "Seated cable row", .upperBack, [.lats, .biceps], "seatedRow", "row", 8, 12, compound: true, start: 80),
-        ex("db_row", "One-arm dumbbell row", .upperBack, [.lats, .biceps], "dumbbells", "row", 8, 12, compound: true, start: 35),
-        ex("bb_row", "Barbell row", .upperBack, [.lats, .biceps], "barbell", "row", 6, 10, compound: true, start: 85),
-        ex("machine_row", "Row machine", .upperBack, [.lats, .biceps], "rowMachine", "row", 8, 12, compound: true, start: 70),
+        ex("cable_row", "Seated cable row", .upperBack, [.lats, .biceps, .rearDelts], "seatedRow", "row", 8, 12, compound: true, start: 80),
+        ex("db_row", "One-arm dumbbell row", .upperBack, [.lats, .biceps, .rearDelts], "dumbbells", "row", 8, 12, compound: true, start: 35),
+        ex("bb_row", "Barbell row", .upperBack, [.lats, .biceps, .rearDelts, .lowerBack], "barbell", "row", 6, 10, compound: true, start: 85),
+        ex("chest_supported_row", "Chest-supported dumbbell row", .upperBack, [.lats, .biceps, .rearDelts], "dumbbells", "row", 8, 12, compound: true, start: 25),
+        ex("tbar_row", "T-bar row", .upperBack, [.lats, .biceps, .rearDelts, .lowerBack], "tBarRow", "row", 8, 12, compound: true, start: 45),
+        ex("inverted_row", "Inverted row", .upperBack, [.lats, .biceps, .rearDelts], "bodyweight", "row", 8, 15, compound: true),
+        ex("machine_row", "Row machine", .upperBack, [.lats, .biceps, .rearDelts], "rowMachine", "row", 8, 12, compound: true, start: 70),
         ex("db_pullover", "Dumbbell pullover", .lats, [.chest], "dumbbells", "pullover", 10, 15, start: 30),
         ex("straight_arm", "Straight-arm pulldown", .lats, [], "cable", "pullover", 10, 15, start: 30),
         ex("back_ext", "Back extension", .lowerBack, [.glutes, .hamstrings], "backExtension", "back_ext", 10, 15),
@@ -224,14 +228,15 @@ enum ExerciseCatalog {
         // Legs
         ex("leg_press", "Leg press", .quads, [.glutes, .hamstrings], "legPress", "squat", 10, 15, compound: true, start: 180),
         ex("hack_squat", "Hack squat", .quads, [.glutes], "hackSquat", "squat", 8, 12, compound: true, start: 90),
-        ex("bb_squat", "Barbell squat", .quads, [.glutes, .hamstrings], "barbell", "squat", 5, 8, compound: true, start: 135),
+        ex("bb_squat", "Barbell squat", .quads, [.glutes, .hamstrings, .lowerBack], "barbell", "squat", 5, 8, compound: true, start: 135),
         ex("smith_squat", "Smith machine squat", .quads, [.glutes], "smith", "squat", 8, 12, compound: true, start: 90),
         ex("goblet_squat", "Goblet squat", .quads, [.glutes], "dumbbells", "squat", 10, 15, compound: true, start: 35),
         ex("leg_ext", "Leg extension", .quads, [], "legExtension", "knee_ext", 10, 15, start: 70),
-        ex("db_lunge", "Dumbbell lunge", .quads, [.glutes], "dumbbells", "knee_ext", 10, 12, compound: true, start: 20),
+        ex("db_lunge", "Dumbbell lunge", .quads, [.glutes], "dumbbells", "lunge", 10, 12, compound: true, start: 20),
         ex("leg_curl", "Leg curl", .hamstrings, [], "legCurl", "knee_flex", 10, 15, start: 60),
-        ex("db_rdl", "Dumbbell Romanian deadlift", .hamstrings, [.glutes], "dumbbells", "knee_flex", 8, 12, compound: true, start: 35),
-        ex("bb_rdl", "Barbell Romanian deadlift", .hamstrings, [.glutes], "barbell", "knee_flex", 8, 12, compound: true, start: 95),
+        ex("db_rdl", "Dumbbell Romanian deadlift", .hamstrings, [.glutes, .lowerBack], "dumbbells", "hinge", 8, 12, compound: true, start: 35),
+        ex("bb_rdl", "Barbell Romanian deadlift", .hamstrings, [.glutes, .lowerBack], "barbell", "hinge", 8, 12, compound: true, start: 95),
+        ex("bb_deadlift", "Deadlift", .glutes, [.hamstrings, .lowerBack, .upperBack, .quads, .lats], "barbell", "hinge", 5, 8, compound: true, start: 135),
         ex("calf_raise_machine", "Calf raise machine", .calves, [], "calfRaise", "calf", 12, 15, start: 90),
         ex("leg_press_calf", "Leg press calf raise", .calves, [], "legPress", "calf", 12, 20, start: 90),
         ex("db_calf_raise", "Dumbbell calf raise", .calves, [], "dumbbells", "calf", 12, 20, start: 25),

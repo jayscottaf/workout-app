@@ -27,6 +27,8 @@ struct LoggingView: View {
     let onDiscard: () -> Void
 
     @Environment(\.modelContext) private var context
+    @Environment(\.openURL) private var openURL
+    @AppStorage("keptPairs") private var keptPairs = ""
     @EnvironmentObject private var rest: RestTimer
     @EnvironmentObject private var health: HealthService
     @Query(sort: \Workout.startedAt, order: .reverse) private var workouts: [Workout]
@@ -41,6 +43,8 @@ struct LoggingView: View {
     @State private var banner: RecordBanner?
     /// Exercises whose warm-up list is open. Closed by default to keep the working set in view.
     @State private var openWarmUps: Set<PersistentIdentifier> = []
+    /// Exercises whose form tips are open. Closed by default.
+    @State private var openTips: Set<PersistentIdentifier> = []
 
     private var gym: Gym? { gyms.first { $0.id == workout.gymID } }
 
@@ -78,7 +82,7 @@ struct LoggingView: View {
         }
         .onAppear {
             // The Lock Screen card stays up for the whole workout, so rests started on the Watch show there too.
-            rest.beginWorkout(title: workout.title, next: workout.nextUpText(after: nil))
+            rest.beginWorkout(title: workout.title, next: workout.nextUpText(after: nil), started: workout.startedAt)
             // Reopened after Finish: start on the first exercise with sets left, else the last one.
             // Open on the exercise the Watch is showing, if any.
             if let shared = WatchLink.shared.currentEntryID, let match = entries.firstIndex(where: { $0.id == shared }) {
@@ -108,7 +112,7 @@ struct LoggingView: View {
             }
         }
         .sheet(isPresented: $showAdd) {
-            AddExerciseSheet(gym: gym, excluded: Set(entries.map(\.exerciseID))) { exercise in
+            AddExerciseSheet(gym: gym, excluded: Set(entries.map(\.exerciseID)), current: entries.map(\.exerciseID)) { exercise in
                 Store.add(exercise, to: workout, gym: gym, history: history,
                           overrides: Store.rangeOverrides(prefs), context: context)
                 index = workout.entries.count - 1
@@ -260,6 +264,11 @@ struct LoggingView: View {
             }
             .card(padding: 12, radius: 16, color: Theme.voltDim)
 
+            if let exercise = entry.exercise,
+               let overlap = Overlap.find(exercise, among: entries.prefix(position).compactMap(\.exercise), kept: Overlap.keptPairs(keptPairs)) {
+                overlapCard(overlap, entry: entry)
+            }
+
             if let first = entry.nextSet, entry.completedSets.isEmpty, !entry.isBodyweight, position == 0 || entry.plateBar != nil {
                 warmUpCard(target: first.weight, entry: entry)
             }
@@ -282,6 +291,8 @@ struct LoggingView: View {
                     .buttonStyle(.plain)
             }
 
+            formCard(entry)
+
             if entry.isDone {
                 if let next = entries.indices.first(where: { !entries[$0].isDone }) {
                     Button("Next: \(entries[next].name)") { index = next }
@@ -293,6 +304,92 @@ struct LoggingView: View {
                 }
             }
         }
+    }
+
+    /// Heads-up when this exercise repeats the job of one done earlier in the workout.
+    private func overlapCard(_ overlap: Overlap, entry: ExerciseEntry) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.2")
+                .font(.system(size: 14, weight: .heavy))
+                .foregroundStyle(Theme.amber)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(overlap.message)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.text)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 18) {
+                    if !entry.isDone {
+                        Button("Swap it") { swapping = entry }
+                            .accessibilityIdentifier("overlapSwap")
+                    }
+                    Button("Keep both") {
+                        withAnimation { keptPairs = Overlap.keeping(entry.exerciseID, overlap.other.id, in: keptPairs) }
+                    }
+                    .accessibilityIdentifier("overlapKeep")
+                }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.amber)
+                .buttonStyle(.plain)
+                .frame(minHeight: 32)
+            }
+            Spacer(minLength: 0)
+        }
+        .card(padding: 12, radius: 16, color: Theme.amberDim)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("overlapCard")
+    }
+
+    /// Short form cues, closed by default, and a YouTube search for the exercise.
+    private func formCard(_ entry: ExerciseEntry) -> some View {
+        let tips = FormTips.tips(for: entry.exerciseID)
+        let open = openTips.contains(entry.persistentModelID)
+        return VStack(alignment: .leading, spacing: 10) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if open { openTips.remove(entry.persistentModelID) } else { openTips.insert(entry.persistentModelID) }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    CapsLabel("How to do it")
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundStyle(Theme.muted)
+                        .rotationEffect(.degrees(open ? 180 : 0))
+                }
+                .frame(minHeight: 28)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(open ? "How to do it. Hide" : "How to do it. Show form tips")
+            .accessibilityIdentifier("formToggle")
+            if open {
+                ForEach(tips, id: \.self) { tip in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Circle().fill(Theme.volt).frame(width: 5, height: 5).accessibilityHidden(true)
+                        Text(tip)
+                            .font(.system(size: 15))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Button {
+                    let query = "\(entry.name) proper form".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                    if let url = URL(string: "https://www.youtube.com/results?search_query=\(query)") { openURL(url) }
+                } label: {
+                    Label("Watch on YouTube", systemImage: "play.rectangle")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.volt)
+                        .frame(minHeight: 36)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens a YouTube search for this exercise")
+                .accessibilityIdentifier("watchYouTube")
+            }
+        }
+        .card(padding: 14, radius: 18)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("formCard")
     }
 
     private func subtitle(_ entry: ExerciseEntry) -> String {
@@ -521,6 +618,7 @@ struct LoggingView: View {
                 }
             }
             .card(padding: 14, radius: 18)
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("warmUpCard")
         }
     }

@@ -308,7 +308,8 @@ final class StatsTests: XCTestCase {
         ]
         let sets = Stats.weeklySets(workouts, weekOf: now, calendar: calendar)
         XCTAssertEqual(sets[.chest], 3)
-        XCTAssertEqual(sets[.triceps], 2)
+        XCTAssertEqual(sets[.triceps], 3.5, "2 pushdown sets plus half of the 3 bench sets")
+        XCTAssertEqual(sets[.shoulders], 1.5, "half of the 3 bench sets")
         XCTAssertNil(sets[.biceps], "last week's work is not counted")
     }
 

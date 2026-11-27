@@ -14,6 +14,9 @@ struct RestActivityAttributes: ActivityAttributes {
         /// can show while the phone is locked (iOS only lets a locked app update a card, not start one).
         /// nil on cards from older builds, which were always resting.
         var resting: Bool?
+        /// When the workout started: between sets the card counts the workout time up from here.
+        /// nil on cards from older builds, which show "Go" instead.
+        var workoutStart: Date? = nil
     }
 
     /// The workout's name, e.g. "Chest & triceps".

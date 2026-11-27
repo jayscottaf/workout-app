@@ -126,12 +126,16 @@ struct SwapSheet: View {
 struct AddExerciseSheet: View {
     let gym: Gym?
     let excluded: Set<String>
+    /// Exercises already in the workout or day, in order, to warn about ones that do the same job.
+    var current: [String] = []
     let onPick: (ExerciseDef) -> Void
+    @AppStorage("keptPairs") private var keptPairs = ""
     @State private var creating = false
     @Environment(\.modelContext) private var context
 
     var body: some View {
         let info = gym?.info
+        let already = current.compactMap { ExerciseCatalog.exercise($0) }
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Add an exercise")
@@ -171,15 +175,23 @@ struct AddExerciseSheet: View {
                                                 Text("\(exercise.muscle.title) · \(exercise.equipmentType.name)")
                                                     .font(.system(size: 13))
                                                     .foregroundStyle(Theme.muted)
+                                                if let overlap = Overlap.find(exercise, among: already, kept: Overlap.keptPairs(keptPairs)) {
+                                                    Label(overlap.message, systemImage: "exclamationmark.2")
+                                                        .font(.system(size: 13))
+                                                        .foregroundStyle(Theme.amber)
+                                                        .fixedSize(horizontal: false, vertical: true)
+                                                }
                                             }
                                             Spacer()
                                             Image(systemName: "plus").foregroundStyle(Theme.volt)
                                         }
                                         .padding(.horizontal, 16)
+                                        .padding(.vertical, 6)
                                         .frame(minHeight: 56)
                                         .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
+                                    .accessibilityIdentifier("add-\(exercise.id)")
                                 }
                                 // Equipment not ticked at this gym yet: picking one ticks it here and adds the exercise.
                                 ForEach(unticked) { exercise in
@@ -235,6 +247,8 @@ struct SettingsView: View {
     @AppStorage("weeklyGoal") private var weeklyGoal = 3
     @AppStorage("absEveryDays") private var absEveryDays = 3
     @AppStorage(RestSetting.key) private var restSeconds = 0
+
+    @AppStorage("keptPairs") private var keptPairs = ""
 
     var body: some View {
         NavigationStack {
@@ -298,6 +312,21 @@ struct SettingsView: View {
                 } footer: {
                     Text("Each exercise has a rep range. Reach the top number on every set and the app suggests the next weight up. Exercises and machines that are not on the built-in list can be added under Your exercises and machines.")
                 }
+
+                if !keptPairs.isEmpty {
+                    Section {
+                        Button("Show hidden warnings again") { keptPairs = "" }
+                            .accessibilityIdentifier("resetKeptPairs")
+                    } footer: {
+                        let count = Overlap.keptPairs(keptPairs).count
+                        Text("You chose Keep both for \(count) \(count == 1 ? "pair" : "pairs") of exercises that do the same job, so the app stopped pointing them out.")
+                    }
+                }
+
+                Section {
+                    LabeledContent("Version", value: Self.versionText)
+                        .accessibilityIdentifier("appVersion")
+                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -305,6 +334,16 @@ struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
         }
+    }
+}
+
+extension SettingsView {
+    /// "1.0 (build 12)", matching the version and build TestFlight shows.
+    static var versionText: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(version) (build \(build))"
     }
 }
 

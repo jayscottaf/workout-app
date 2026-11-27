@@ -76,7 +76,11 @@ final class WalkthroughTests: XCTestCase {
 
         // Keep going after Finish: the workout reopens to add more, then finishes again.
         let keepGoing = app.buttons["keepGoing"]
-        if !keepGoing.isHittable { app.swipeUp() }
+        // Scroll until the button is clear of the Done bar pinned at the bottom.
+        for _ in 0..<5 where !keepGoing.isHittable || keepGoing.frame.maxY > app.buttons["summaryDone"].frame.minY {
+            app.swipeUp()
+        }
+        shot("05c-before-keep-going")
         keepGoing.tap()
         XCTAssertTrue(app.buttons["finishWorkout"].waitForExistence(timeout: 10))
         shot("05b-reopened")
@@ -302,6 +306,89 @@ final class WalkthroughTests: XCTestCase {
         shot("26-which-workout")
         app.buttons.matching(NSPredicate(format: "label CONTAINS ' set'")).firstMatch.tap()
         XCTAssertTrue(app.buttons["summaryDone"].waitForExistence(timeout: 5))
+    }
+
+    /// Muscle tags, form tips, the same-job warning, muscles worked, still to hit, and the version.
+    @MainActor
+    func testMuscleFeatures() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demoData"]
+        app.launch()
+        XCTAssertTrue(app.otherElements["muscleTags"].waitForExistence(timeout: 30) || app.staticTexts["Chest"].exists)
+        shot("30-muscle-tags")
+
+        app.buttons["startWorkout"].tap()
+        XCTAssertTrue(app.buttons["logSet"].waitForExistence(timeout: 10))
+        let form = app.buttons["formToggle"]
+        for _ in 0..<4 where !form.isHittable { app.swipeUp() }
+        form.tap()
+        XCTAssertTrue(app.buttons["watchYouTube"].waitForExistence(timeout: 5))
+        shot("31-form-tips")
+
+        // Chest press machine does the same job as the dumbbell bench press already in the workout.
+        app.swipeDown()
+        app.buttons["addMenu"].tap()
+        app.buttons["Add an exercise"].tap()
+        let press = app.buttons["add-machine_chest_press"]
+        XCTAssertTrue(press.waitForExistence(timeout: 5))
+        for _ in 0..<6 where !press.isHittable { app.swipeUp() }
+        XCTAssertTrue(press.label.contains("Same job as"), press.label)
+        shot("32-add-sheet-warning")
+        press.tap()
+        XCTAssertTrue(app.otherElements["overlapCard"].waitForExistence(timeout: 10) || app.buttons["overlapSwap"].waitForExistence(timeout: 2))
+        shot("33-overlap-card")
+
+        app.buttons["logSet"].tap()
+        app.buttons["Skip rest"].tap()
+        app.buttons["finishWorkout"].tap()
+        let confirm = app.buttons["Finish workout"]
+        if confirm.waitForExistence(timeout: 3) { confirm.tap() }
+        XCTAssertTrue(app.buttons["summaryDone"].waitForExistence(timeout: 10))
+        let worked = app.staticTexts["MUSCLES WORKED"]
+        for _ in 0..<4 where !worked.isHittable { app.swipeUp() }
+        XCTAssertTrue(worked.exists)
+        shot("34-muscles-worked")
+        app.buttons["summaryDone"].tap()
+
+        app.tabBars.buttons["Progress"].tap()
+        let still = app.staticTexts["STILL TO HIT THIS WEEK"]
+        XCTAssertTrue(app.staticTexts["ESTIMATED STRENGTH"].waitForExistence(timeout: 10))
+        for _ in 0..<4 where !still.isHittable { app.swipeUp() }
+        XCTAssertTrue(still.exists)
+        shot("35-still-to-hit")
+    }
+
+    /// Back & biceps has two rows: the heads-up, tap-to-open tags, Edit today, Undo and Keep both.
+    @MainActor
+    func testEditTodayAndKeepBoth() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demoData"]
+        app.launch()
+        XCTAssertTrue(app.buttons["startWorkout"].waitForExistence(timeout: 30))
+        app.buttons["Do a different day instead"].tap()
+        app.buttons["Back & biceps"].tap()
+        XCTAssertTrue(app.otherElements["planOverlap"].waitForExistence(timeout: 5) || app.buttons["keepBoth"].waitForExistence(timeout: 2))
+
+        app.buttons["tag-biceps"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Brachialis'")).firstMatch.waitForExistence(timeout: 5))
+        shot("40-tag-open")
+
+        app.buttons["editToday"].tap()
+        let row = app.buttons["todayRow-db_row"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        shot("41-edit-today")
+        row.swipeLeft()
+        app.buttons["Delete"].tap()
+        app.buttons["todayDone"].tap()
+        XCTAssertTrue(app.buttons["undoToday"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["keepBoth"].exists)
+        shot("42-changed-for-today")
+
+        app.buttons["undoToday"].tap()
+        XCTAssertTrue(app.buttons["keepBoth"].waitForExistence(timeout: 5))
+        app.buttons["keepBoth"].tap()
+        XCTAssertFalse(app.buttons["keepBoth"].waitForExistence(timeout: 2))
+        shot("43-kept-both")
     }
 
     private func shot(_ name: String) {

@@ -73,14 +73,20 @@ enum Stats {
         }
     }
 
-    /// Sets per muscle group in the week containing `date`.
-    static func weeklySets(_ workouts: [WorkoutRecord], weekOf date: Date, calendar: Calendar = .current) -> [MuscleGroup: Int] {
+    /// Sets per muscle group in the week containing `date`. A full set for the main muscle's group and half a set
+    /// for each other group a helper muscle belongs to (a bench press adds half a set to triceps and shoulders).
+    static func weeklySets(_ workouts: [WorkoutRecord], weekOf date: Date, calendar: Calendar = .current) -> [MuscleGroup: Double] {
         guard let week = calendar.dateInterval(of: .weekOfYear, for: date) else { return [:] }
-        var result: [MuscleGroup: Int] = [:]
+        var result: [MuscleGroup: Double] = [:]
         for workout in workouts where week.contains(workout.date) {
             for entry in workout.entries {
-                guard let group = ExerciseCatalog.exercise(entry.exerciseID)?.muscle.group else { continue }
-                result[group, default: 0] += entry.sets.count
+                guard let exercise = ExerciseCatalog.exercise(entry.exerciseID) else { continue }
+                let count = Double(entry.sets.count)
+                let main = exercise.muscle.group
+                result[main, default: 0] += count
+                for group in Set(exercise.secondary.map(\.group)) where group != main {
+                    result[group, default: 0] += count * MuscleMap.helperCredit
+                }
             }
         }
         return result

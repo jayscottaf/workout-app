@@ -13,6 +13,7 @@ struct TodayView: View {
     @AppStorage("currentGymID") private var currentGymID = ""
     @AppStorage("weeklyGoal") private var weeklyGoal = 3
     @AppStorage("absEveryDays") private var absEveryDays = 3
+    @AppStorage("keptPairs") private var keptPairs = ""
 
     @State private var includeAbs = false
     @State private var extras: [String] = []
@@ -22,6 +23,11 @@ struct TodayView: View {
     @State private var equipmentGym: Gym?
     @ObservedObject private var routine = RoutineStore.shared
     @State private var showRecap = false
+    /// Today's exercises after "Edit today" (swaps, removals, additions, order). nil = the routine as planned.
+    @State private var customPlan: [PlannedExercise]?
+    @State private var editingToday = false
+    /// The muscle tag that is open to show its parts (upper, middle, lower chest...).
+    @State private var openTag: Muscle?
 
     private var currentGym: Gym? {
         gyms.first { $0.id.uuidString == currentGymID } ?? gyms.first
@@ -33,8 +39,8 @@ struct TodayView: View {
         // A day picked by hand is looked up again, so edits to the routine show straight away.
         let day = dayOverride.flatMap { picked in routine.days.first { $0.id == picked.id } } ?? Rotation.nextDay(history: history)
         let overrides = Store.rangeOverrides(prefs)
-        let plan = Planner.plan(day: day, includeAbs: includeAbs, quick: false, gym: gym?.info, history: history,
-                                rangeOverrides: overrides)
+        let plan = customPlan ?? Planner.plan(day: day, includeAbs: includeAbs, quick: false, gym: gym?.info, history: history,
+                                               rangeOverrides: overrides)
         let status = Streak.status(dates: Store.finished(workouts).map(\.startedAt), goal: weeklyGoal)
         let active = workouts.first { $0.endedAt == nil }
 
@@ -65,6 +71,20 @@ struct TodayView: View {
         .sheet(isPresented: $showRoutine) { RoutineSheet() }
         .sheet(item: $equipmentGym) { item in GymEquipmentSheet(gym: item) }
         .sheet(isPresented: $showRecap) { RecapSheet(month: previousMonth) }
+        .sheet(isPresented: $editingToday) {
+            TodayEditSheet(day: day, plan: plan, gym: gym, history: history, overrides: overrides) { edited, saveToRoutine in
+                editingToday = false
+                if saveToRoutine {
+                    save(edited, to: day)
+                    customPlan = nil
+                } else {
+                    customPlan = edited
+                }
+            }
+        }
+        // Today's edits belong to this day at this gym.
+        .onChange(of: dayOverride?.id) { customPlan = nil; openTag = nil }
+        .onChange(of: currentGymID) { customPlan = nil }
     }
 
     // MARK: header
@@ -149,6 +169,53 @@ struct TodayView: View {
                 Text("\(plan.count) exercises · about \(Planner.estimateMinutes(plan)) min · \(lastDone(day))")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Theme.onVoltSoft)
+                muscleTags(plan.map(\.exercise.id))
+                if let pair = Overlap.firstPair(plan.map(\.exercise), kept: Overlap.keptPairs(keptPairs)) {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.2").accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("\(pair.exercise.name) and \(pair.overlap.other.name) do the same job.")
+                                .fixedSize(horizontal: false, vertical: true)
+                            HStack(spacing: 16) {
+                                Button("Change today") { editingToday = true }
+                                    .underline()
+                                    .accessibilityIdentifier("overlapEditToday")
+                                Button("Keep both") {
+                                    keptPairs = Overlap.keeping(pair.exercise.id, pair.overlap.other.id, in: keptPairs)
+                                }
+                                .underline()
+                                .accessibilityIdentifier("keepBoth")
+                            }
+                            .buttonStyle(.plain)
+                            .frame(minHeight: 32)
+                        }
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.onVolt)
+                    .padding(.top, 6)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("planOverlap")
+                }
+                HStack(spacing: 14) {
+                    Button {
+                        editingToday = true
+                    } label: {
+                        Label(customPlan == nil ? "Edit today's exercises" : "Changed for today · edit", systemImage: "list.bullet")
+                            .font(.system(size: 13, weight: .bold))
+                    }
+                    .accessibilityIdentifier("editToday")
+                    if customPlan != nil {
+                        Button("Undo") { customPlan = nil }
+                            .font(.system(size: 13, weight: .bold))
+                            .underline()
+                            .accessibilityLabel("Undo today's changes")
+                            .accessibilityIdentifier("undoToday")
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Theme.onVolt)
+                .frame(minHeight: 36)
+                .padding(.top, 2)
             }
             HStack(spacing: 8) {
                 Button("Start workout") {
@@ -158,6 +225,7 @@ struct TodayView: View {
                 .accessibilityIdentifier("startWorkout")
                 .disabled(plan.isEmpty)
 
+                if customPlan == nil {
                 Button {
                     start(day: day, quick: true, history: history, gym: gym, overrides: overrides)
                 } label: {
@@ -171,6 +239,7 @@ struct TodayView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Start the 20 minute version")
                 .accessibilityIdentifier("startQuick")
+                }
             }
         }
         .foregroundStyle(Theme.onVolt)
@@ -194,14 +263,98 @@ struct TodayView: View {
         .card(padding: 22, radius: 28, color: Theme.volt)
     }
 
+    /// Main muscles as tags. Muscles split into parts (chest, triceps, biceps, shoulders) open to show
+    /// which exercise works which part, for example "Upper: Incline dumbbell press".
+    @ViewBuilder
+    private func muscleTags(_ ids: [String]) -> some View {
+        let muscles = MuscleMap.targets(ids)
+        if !muscles.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                FlowLayout(spacing: 6) {
+                    ForEach(muscles, id: \.self) { muscle in
+                        let split = MuscleParts.hasParts(muscle)
+                        let open = openTag == muscle
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) { openTag = open ? nil : muscle }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(muscle.title)
+                                if split {
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 9, weight: .heavy))
+                                        .rotationEffect(.degrees(open ? 180 : 0))
+                                }
+                            }
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(open ? Theme.volt : Theme.onVolt)
+                            .padding(.horizontal, 10)
+                            .frame(minHeight: 28)
+                            .background(open ? Theme.onVolt : Theme.onVolt.opacity(0.1), in: Capsule())
+                            .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .allowsHitTesting(split)
+                        .accessibilityRemoveTraits(split ? [] : .isButton)
+                        .accessibilityLabel(muscle.title)
+                        .accessibilityHint(split ? (open ? "Hides its parts" : "Shows which exercise works which part") : "")
+                        .accessibilityIdentifier("tag-\(muscle.rawValue)")
+                    }
+                }
+                if let muscle = openTag, muscles.contains(muscle) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(MuscleParts.breakdown(ids, muscle: muscle), id: \.part) { row in
+                            (Text("\(row.part): ").bold()
+                             + Text(row.exercises.isEmpty ? "nothing today" : row.exercises.joined(separator: ", ")))
+                                .font(.system(size: 13))
+                                .foregroundStyle(row.exercises.isEmpty ? Theme.onVoltSoft : Theme.onVolt)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("tagParts")
+                }
+            }
+            .padding(.top, 6)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("muscleTags")
+        }
+    }
+
+    /// "Also change my routine": today's list becomes the day's list. A swapped exercise gets a new
+    /// position key so the planner does not bring back what was last done in that spot.
+    private func save(_ plan: [PlannedExercise], to day: DayType) {
+        guard let index = routine.days.firstIndex(where: { $0.id == day.id }) else { return }
+        var updated = routine.days[index]
+        let prefix = updated.id + "."
+        let old = Dictionary(uniqueKeysWithValues: updated.items.map { ($0.key, $0.exercise) })
+        updated.items = plan.filter { !($0.slotID?.hasPrefix("abs.") ?? false) }.map { planned in
+            if let slotID = planned.slotID, slotID.hasPrefix(prefix) {
+                let key = String(slotID.dropFirst(prefix.count))
+                if old[key] == planned.exercise.id { return DaySlot(key: key, exercise: planned.exercise.id) }
+            }
+            return DaySlot(key: String(UUID().uuidString.prefix(8)), exercise: planned.exercise.id)
+        }
+        updated.quick = nil
+        routine.days[index] = updated
+    }
+
     private func lastDone(_ day: DayType) -> String {
         guard let last = Store.finished(workouts).first(where: { $0.dayRaw == day.id }) else { return "first time" }
         return "last done \(last.startedAt.formatted(.dateTime.month(.abbreviated).day()))"
     }
 
     private func start(day: DayType, quick: Bool, history: History, gym: Gym?, overrides: [String: ClosedRange<Int>]) {
-        var plan = Planner.plan(day: day, includeAbs: includeAbs, quick: quick, gym: gym?.info, history: history,
+        var plan: [PlannedExercise]
+        if let customPlan, !quick {
+            plan = customPlan
+            if includeAbs {
+                plan += Planner.absPlan(quick: false, gym: gym?.info, history: history, rangeOverrides: overrides,
+                                        excluding: Set(plan.map(\.exercise.id)))
+            }
+        } else {
+            plan = Planner.plan(day: day, includeAbs: includeAbs, quick: quick, gym: gym?.info, history: history,
                                 rangeOverrides: overrides)
+        }
         for id in extras {
             guard let exercise = ExerciseCatalog.exercise(id), !plan.contains(where: { $0.exercise.id == id }) else { continue }
             plan.append(Planner.planExercise(exercise, slotID: nil, gym: gym?.info, history: history,
@@ -213,6 +366,8 @@ struct TodayView: View {
         includeAbs = false
         extras = []
         dayOverride = nil
+        customPlan = nil
+        openTag = nil
         Haptics.tap()
         onStart(workout)
     }

@@ -95,6 +95,7 @@ struct RoutineSheet: View {
 struct DayEditor: View {
     @Binding var day: DayType
     @State private var adding = false
+    @AppStorage("keptPairs") private var keptPairs = ""
 
     var body: some View {
         List {
@@ -111,6 +112,17 @@ struct DayEditor: View {
                         if let exercise {
                             Text("\(exercise.muscle.title) · \(exercise.equipmentType.name)")
                                 .font(.footnote).foregroundStyle(.secondary)
+                            if let overlap = Overlap.find(exercise, among: day.items.prefix(index).compactMap { ExerciseCatalog.exercise($0.exercise) },
+                                                          kept: Overlap.keptPairs(keptPairs)) {
+                                Label(overlap.message, systemImage: "exclamationmark.2")
+                                    .font(.footnote)
+                                    .foregroundStyle(Theme.amber)
+                                Button("Keep both") {
+                                    keptPairs = Overlap.keeping(exercise.id, overlap.other.id, in: keptPairs)
+                                }
+                                .font(.footnote.weight(.semibold))
+                                .buttonStyle(.borderless)
+                            }
                         }
                     }
                     .swipeActions {
@@ -133,7 +145,7 @@ struct DayEditor: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .primaryAction) { EditButton() } }
         .sheet(isPresented: $adding) {
-            AddExerciseSheet(gym: nil, excluded: Set(day.slots)) { exercise in
+            AddExerciseSheet(gym: nil, excluded: Set(day.slots), current: day.slots) { exercise in
                 day.add(exercise.id)
                 adding = false
             }

@@ -66,6 +66,7 @@ struct LoggingView: View {
 
         VStack(spacing: 0) {
             topBar(entries: entries, position: position)
+            ScrollViewReader { proxy in
             ScrollView {
                 if entries.indices.contains(position) {
                     exerciseBody(entries[position], entries: entries, position: position, history: history)
@@ -78,6 +79,14 @@ struct LoggingView: View {
                         .foregroundStyle(Theme.muted)
                         .padding(40)
                 }
+            }
+            // After logging a set, keep the next one (and its Log set button) above the rest timer.
+            .onChange(of: rest.isRunning) { _, running in
+                guard running else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    withAnimation(.easeInOut(duration: 0.25)) { proxy.scrollTo("activeSet", anchor: nil) }
+                }
+            }
             }
         }
         .screen()
@@ -260,6 +269,7 @@ struct LoggingView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(entry.name)
                         .scaledFont(30, weight: .heavy, design: .rounded)
+                        .minimumScaleFactor(0.6)
                         .tracking(-0.5)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
@@ -544,6 +554,8 @@ struct LoggingView: View {
                 Text("\(weightText(set.weight, entry: nil)) × \(set.reps)")
                     .scaledFont(20, weight: .bold, design: .rounded)
                     .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 Spacer(minLength: 0)
                 if let effort = set.effort {
                     Text(effort.title.uppercased())
@@ -554,6 +566,7 @@ struct LoggingView: View {
                 if set.prKindRaw != nil {
                     Text("RECORD")
                         .scaledFont(11, weight: .heavy)
+                        .fixedSize()
                         .foregroundStyle(Theme.onVolt)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -676,6 +689,7 @@ struct LoggingView: View {
         .padding(16)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(Theme.volt, lineWidth: 2))
+        .id("activeSet")
     }
 
     /// Lighter sets to do first. They are a guide only and are not logged.
@@ -874,6 +888,8 @@ struct RestBar: View {
                     Text(rest.text)
                         .scaledFont(34, weight: .heavy, design: .rounded)
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .fixedSize()
                         .accessibilityLabel("\(rest.text) of rest left")
                 }
                 Spacer()

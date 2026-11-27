@@ -97,6 +97,8 @@ struct TodayView: View {
                 CapsLabel(Date().longDay)
                 Text("Today")
                     .scaledFont(34, weight: .heavy, design: .rounded)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                     .accessibilityAddTraits(.isHeader)
             }
             Spacer()

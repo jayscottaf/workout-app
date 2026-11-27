@@ -62,8 +62,9 @@ struct NextUpApp: App {
                 .environmentObject(rest)
                 .preferredColorScheme(.dark)
                 .tint(Theme.volt)
-                // Text follows the iPhone's text size, up to a size the workout screen still fits.
-                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                // Text follows the iPhone's text size up to the largest standard size. The accessibility
+                // sizes beyond it broke words in half and pushed the set you are doing off the screen.
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
         .modelContainer(container)
     }

@@ -39,7 +39,7 @@ Arguments → add `-demoData`.
 | Supersets | In a workout, the top menu → Superset with… pairs two exercises; logging a set jumps to the other one, and rest starts after each round. |
 | Machine settings | Notes per machine at each gym (seat 4, pin 6), shown during the workout and edited from the gym list. |
 | How it felt | Press and hold a logged set to mark it easy, hard or failed. All easy at the top of the range jumps two steps; a failed set holds the weight. Optional. |
-| Larger Text | Text follows the iPhone's text size, up to a large accessibility size. |
+| Larger Text | Text follows the iPhone's text size, up to the largest standard size (the bigger accessibility sizes are capped there so words and the timer don't break). |
 | iCloud | Workouts, gyms and exercises sync through your private iCloud when it is on for the app. Routine and settings stay on the phone. |
 | Privacy | Everything stays on your devices: no accounts, ads, analytics or tracking. `NextUp/PrivacyInfo.xcprivacy` and `NextUpWatch/PrivacyInfo.xcprivacy` are Apple's privacy manifests; The privacy policy is published at https://sites.google.com/view/next-up-privacy-policy (text in `docs/privacy.md`) and linked from Settings. |
 

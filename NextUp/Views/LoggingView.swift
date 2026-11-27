@@ -39,6 +39,8 @@ struct LoggingView: View {
     @State private var showEquipment = false
     @State private var confirmFinish = false
     @State private var banner: RecordBanner?
+    /// Exercises whose warm-up list is open. Closed by default to keep the working set in view.
+    @State private var openWarmUps: Set<PersistentIdentifier> = []
 
     private var gym: Gym? { gyms.first { $0.id == workout.gymID } }
 
@@ -463,14 +465,43 @@ struct LoggingView: View {
         let bar = entry.plateBar
         let sets = WarmUp.sets(target: target, step: entry.increment, bar: bar ?? 0)
         if !sets.isEmpty {
+            let open = openWarmUps.contains(entry.persistentModelID)
+            let low = sets.first.map { Fmt.weight($0.weight) } ?? ""
+            let high = sets.last.map { Fmt.weight($0.weight) } ?? ""
+            let range = sets.count > 1 ? "\(low)–\(high) lb" : "\(low) lb"
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    CapsLabel("Warm-up first")
-                    Spacer()
-                    Text("not logged")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.muted)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        if open { openWarmUps.remove(entry.persistentModelID) } else { openWarmUps.insert(entry.persistentModelID) }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        CapsLabel("Warm-up first")
+                        if !open {
+                            Text("\(sets.count) \(sets.count == 1 ? "set" : "sets") · \(range)")
+                                .font(.system(size: 13, weight: .semibold))
+                                .monospacedDigit()
+                                .foregroundStyle(Theme.text)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                        if open {
+                            Text("not logged")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.muted)
+                        }
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12, weight: .heavy))
+                            .foregroundStyle(Theme.muted)
+                            .rotationEffect(.degrees(open ? 180 : 0))
+                    }
+                    .frame(minHeight: 28)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(open ? "Warm-up sets, not logged. Hide" : "Warm-up: \(sets.count) sets, \(range). Show")
+                .accessibilityIdentifier("warmUpToggle")
+                if open {
                 ForEach(Array(sets.enumerated()), id: \.offset) { _, set in
                     HStack(spacing: 10) {
                         Text("\(Fmt.weight(set.weight)) lb × \(set.reps)")
@@ -486,6 +517,7 @@ struct LoggingView: View {
                         Spacer(minLength: 0)
                     }
                     .accessibilityElement(children: .combine)
+                }
                 }
             }
             .card(padding: 14, radius: 18)

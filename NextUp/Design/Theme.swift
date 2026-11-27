@@ -127,6 +127,8 @@ struct CircleIconButton: View {
     let label: String
     var fill: Color = Theme.surface2
     var foreground: Color = Theme.text
+    /// Keep firing while held down, for − and + on weights and reps.
+    var repeats = false
     let action: () -> Void
 
     var body: some View {
@@ -138,6 +140,7 @@ struct CircleIconButton: View {
                 .background(fill, in: Circle())
         }
         .buttonStyle(.plain)
+        .buttonRepeatBehavior(repeats ? .enabled : .disabled)
         .accessibilityLabel(label)
     }
 }

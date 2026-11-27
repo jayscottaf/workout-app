@@ -323,6 +323,8 @@ struct SettingsView: View {
                     }
                 }
 
+                ExportSection()
+
                 Section {
                     LabeledContent("Version", value: Self.versionText)
                         .accessibilityIdentifier("appVersion")

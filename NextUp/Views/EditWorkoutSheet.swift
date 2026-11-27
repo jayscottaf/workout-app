@@ -117,7 +117,7 @@ struct EditWorkoutSheet: View {
                          less: @escaping () -> Void, more: @escaping () -> Void,
                          type typeLabel: String? = nil, onType: (() -> Void)? = nil) -> some View {
         HStack(spacing: 0) {
-            CircleIconButton(systemName: "minus", label: lessLabel, fill: Theme.line) {
+            CircleIconButton(systemName: "minus", label: lessLabel, fill: Theme.line, repeats: true) {
                 less()
                 changed = true
                 Haptics.tap()
@@ -136,7 +136,7 @@ struct EditWorkoutSheet: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            CircleIconButton(systemName: "plus", label: moreLabel, fill: Theme.line) {
+            CircleIconButton(systemName: "plus", label: moreLabel, fill: Theme.line, repeats: true) {
                 more()
                 changed = true
                 Haptics.tap()

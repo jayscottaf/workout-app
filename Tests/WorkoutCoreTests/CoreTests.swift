@@ -448,3 +448,40 @@ final class TypedWeightTests: XCTestCase {
         XCTAssertNil(Fmt.parseWeight("5000"))
     }
 }
+
+final class ExportTests: XCTestCase {
+    private let utc = TimeZone(identifier: "UTC")!
+
+    private func set(_ minutes: Double, _ exercise: String = "Bench press", n: Int = 1, weight: Double = 135, reps: Int = 8,
+                     pr: PRKind? = nil) -> ExportSet {
+        ExportSet(date: now.addingTimeInterval(minutes * 60), workout: "Chest & triceps", gym: "Home", exercise: exercise,
+                  muscle: "Chest", compound: true, equipment: "Barbell", setNumber: n, weight: weight, reps: reps, pr: pr)
+    }
+
+    func testHeaderAndOneRowPerSet() {
+        let lines = Export.csv([set(0), set(2, n: 2, reps: 7)], timeZone: utc).components(separatedBy: "\r\n")
+        XCTAssertEqual(lines[0], "Date,Workout,Gym,Exercise,Muscle,Compound,Equipment,Set,Weight (lb),Reps,Volume (lb),Personal record")
+        XCTAssertEqual(lines.count, 4) // header, two sets, final empty line
+        XCTAssertTrue(lines[1].hasSuffix(",Chest & triceps,Home,Bench press,Chest,Yes,Barbell,1,135,8,1080,"))
+        XCTAssertTrue(lines[2].contains(",2,135,7,945,"))
+    }
+
+    func testOldestFirstAndBodyWeight() {
+        let csv = Export.csv([set(60, "Dips", weight: 0, reps: 12, pr: .reps), set(0)], timeZone: utc)
+        let lines = csv.components(separatedBy: "\r\n")
+        XCTAssertTrue(lines[1].contains("Bench press"))
+        XCTAssertTrue(lines[2].hasSuffix(",Dips,Chest,Yes,Barbell,1,Body weight,12,0,Most reps"))
+    }
+
+    func testQuotingAndFormulaSafety() {
+        XCTAssertEqual(Export.field("Plain"), "Plain")
+        XCTAssertEqual(Export.field("Row, cable"), "\"Row, cable\"")
+        XCTAssertEqual(Export.field("6\" grip"), "\"6\"\" grip\"")
+        XCTAssertEqual(Export.field("=SUM(A1)"), "'=SUM(A1)")
+    }
+
+    func testFileName() {
+        XCTAssertTrue(Export.fileName(on: now, timeZone: utc).hasPrefix("Next Up workouts 20"))
+        XCTAssertTrue(Export.fileName(on: now, timeZone: utc).hasSuffix(".csv"))
+    }
+}

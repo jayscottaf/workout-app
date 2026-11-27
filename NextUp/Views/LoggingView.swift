@@ -633,7 +633,7 @@ struct LoggingView: View {
                          less: @escaping () -> Void, more: @escaping () -> Void,
                          type typeLabel: String? = nil, onType: (() -> Void)? = nil) -> some View {
         HStack(spacing: 0) {
-            CircleIconButton(systemName: "minus", label: lessLabel, fill: Theme.line) {
+            CircleIconButton(systemName: "minus", label: lessLabel, fill: Theme.line, repeats: true) {
                 less()
                 Haptics.tap()
             }
@@ -651,7 +651,7 @@ struct LoggingView: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            CircleIconButton(systemName: "plus", label: moreLabel, fill: Theme.line) {
+            CircleIconButton(systemName: "plus", label: moreLabel, fill: Theme.line, repeats: true) {
                 more()
                 Haptics.tap()
             }

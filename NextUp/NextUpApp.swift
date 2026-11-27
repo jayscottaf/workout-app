@@ -3,6 +3,8 @@ import SwiftData
 
 @main
 struct NextUpApp: App {
+    /// Set when the saved workouts could not be opened at launch.
+    static var databaseProblem: String?
     private let container: ModelContainer
     @StateObject private var health: HealthService
     @StateObject private var rest = RestTimer.shared
@@ -17,7 +19,15 @@ struct NextUpApp: App {
         do {
             container = try ModelContainer(for: schema, configurations: [configuration])
         } catch {
-            fatalError("Could not open the workout database: \(error)")
+            // Never crash on launch. The saved file is left exactly as it is (nothing is deleted),
+            // the app opens with a temporary empty database, and a message explains what happened.
+            NextUpApp.databaseProblem = "\(error)"
+            let temporary = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            do {
+                container = try ModelContainer(for: schema, configurations: [temporary])
+            } catch {
+                fatalError("Could not open even a temporary workout database: \(error)")
+            }
         }
         Store.seedIfNeeded(ModelContext(container), demo: demo)
         // The Lock Screen card stays while a workout is in progress (even if the app was closed), else it is cleared.
@@ -53,6 +63,7 @@ struct RootView: View {
     @Query(sort: \Workout.startedAt, order: .reverse) private var workouts: [Workout]
     @State private var session: Workout?
     @State private var didResume = false
+    @State private var showDatabaseProblem = NextUpApp.databaseProblem != nil
 
     var body: some View {
         TabView {
@@ -75,6 +86,11 @@ struct RootView: View {
         .onChange(of: workouts.first { $0.endedAt == nil }?.id) { _, id in
             // A finished workout reopened from the calendar: bring up its workout screen.
             if session == nil, let id { session = workouts.first { $0.id == id } }
+        }
+        .alert("Your saved workouts could not be opened", isPresented: $showDatabaseProblem) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Nothing was deleted. The app is running on a temporary blank copy, so anything you log now will not be kept. Close the app fully and open it again. If this keeps happening, update the app, and contact support before deleting it.")
         }
         .onReceive(WatchLink.shared.$closeWorkoutID) { id in
             // The Watch discarded the workout on screen: close it before it is deleted.

@@ -19,7 +19,7 @@ Arguments → add `-demoData`.
 | Rotation | Offers the day after the one you did last, however long ago. You can pick a different day. |
 | Routine | Rename, add, remove and reorder days, and choose the exercises each day starts with, or switch to a ready-made routine (Push / Pull / Legs, Upper / Lower, Full body). Open it from Change → Edit routine on Today, or Settings → Days and exercises. Logged workouts and records are kept. |
 | Abs | Add-on offered every few days (default 3, change in Settings). |
-| Fast logging | Sets pre-filled with today's target, one tap to confirm, +/- for weight and reps (or tap the weight to type it, for big jumps like 135 to 225), rest timer starts by itself. |
+| Fast logging | Sets pre-filled with today's target, one tap to confirm, +/- for weight and reps (hold to keep changing, or tap the weight to type it, for big jumps like 135 to 225), rest timer starts by itself. |
 | Plates and warm-ups | Barbell and plate-loaded exercises show what to put on each side (45 lb bar, standard plates), on the phone and the Watch. The phone also suggests lighter warm-up sets before the first set; they are not logged. |
 | Rest on the Lock Screen | The rest countdown shows on the Lock Screen and in the Dynamic Island (a Live Activity), so you can see it without opening the app. |
 | Fix a past workout | Open a workout from the calendar or the summary, tap Edit, and change or remove a set. Personal records are worked out again afterwards. |
@@ -32,6 +32,8 @@ Arguments → add `-demoData`.
 | Progress | Personal records, estimated strength chart, weekly sets per muscle group, calendar, monthly recap. |
 | Apple Health | Reads runs, walks and body weight. Saves each lifting session as a strength workout. |
 | Streak | Counts weeks where you hit your weekly goal (default 3), not days. |
+| Export | Settings → Export workouts (CSV) makes a spreadsheet of every logged set, to save to Files, AirDrop or email as a backup. |
+| Privacy | Everything stays on your devices: no accounts, ads, analytics or tracking. `NextUp/PrivacyInfo.xcprivacy` and `NextUpWatch/PrivacyInfo.xcprivacy` are Apple's privacy manifests; `docs/privacy.html` is the privacy policy page for the App Store listing. |
 
 ## Apple Watch
 
@@ -79,6 +81,7 @@ NextUpRestActivity/ The small extension that draws the rest countdown on the Loc
 Shared/             The data the phone and the Watch send each other, plus the plate and warm-up maths.
 NextUpUITests/      Drives the app in the simulator through the main flow and screenshots each step.
 Tests/              Unit tests for the rules.
+docs/               The privacy policy web page.
 ```
 
 ## Tests

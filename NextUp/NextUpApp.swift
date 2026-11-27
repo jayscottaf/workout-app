@@ -40,7 +40,10 @@ struct NextUpApp: App {
         let health = HealthService()
         _health = StateObject(wrappedValue: health)
         // Apple Watch: also runs when the Watch wakes the app in the background.
-        WatchLink.shared.activate(container: container, health: health)
+        // Not while on the temporary blank database: the Watch would take it as the truth and drop its workout.
+        if NextUpApp.databaseProblem == nil {
+            WatchLink.shared.activate(container: container, health: health)
+        }
         // A countdown started, lengthened or skipped on the phone shows on the Watch too.
         RestTimer.shared.onChange = { WatchLink.shared.push() }
     }

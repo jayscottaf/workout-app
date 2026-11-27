@@ -269,7 +269,9 @@ struct LoggingView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(entry.name)
                         .scaledFont(30, weight: .heavy, design: .rounded)
-                        .minimumScaleFactor(0.6)
+                        // Two lines at most: shrink rather than split a word like "Dumbbell" in half.
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.5)
                         .tracking(-0.5)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
@@ -379,6 +381,8 @@ struct LoggingView: View {
                 if let next = entries.indices.first(where: { !entries[$0].isDone }) {
                     Button("Next: \(entries[next].name)") { index = next }
                         .buttonStyle(PrimaryButtonStyle())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                         .accessibilityIdentifier("nextExercise")
                 } else {
                     Button("Finish workout") { finish() }
@@ -555,7 +559,7 @@ struct LoggingView: View {
                     .scaledFont(20, weight: .bold, design: .rounded)
                     .monospacedDigit()
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .minimumScaleFactor(0.5)
                 Spacer(minLength: 0)
                 if let effort = set.effort {
                     Text(effort.title.uppercased())

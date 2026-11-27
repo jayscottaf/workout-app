@@ -113,6 +113,8 @@ struct ChipButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaledFont(15, weight: .semibold)
+            .lineLimit(1)
+            .fixedSize()
             .foregroundStyle(foreground)
             .padding(.horizontal, 16)
             .frame(minHeight: 44)

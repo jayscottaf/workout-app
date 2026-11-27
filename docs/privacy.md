@@ -13,7 +13,7 @@ The workouts you log (exercises, sets, weights, reps and dates), your gyms and t
 
 ## Apple Health
 
-If you choose to connect Apple Health, Next Up reads your runs, walks and body weight to show them next to your lifting, reads heart rate and calories on Apple Watch while you lift, and saves each lifting session to Apple Health as a strength workout. You can turn any of this off at any time in the Health app or in iPhone Settings.
+If you choose to connect Apple Health, Next Up reads your cardio workouts (runs, walks, rides, elliptical, stairs, hikes and similar) and body weight to show them next to your lifting, reads heart rate and calories on Apple Watch while you lift, and saves each lifting session to Apple Health as a strength workout. You can turn any of this off at any time in the Health app or in iPhone Settings.
 
 Information from Apple Health is used only to show it to you inside the app. It is never sent to the developer, never shared with or sold to anyone, and never used for advertising or marketing.
 

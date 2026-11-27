@@ -188,8 +188,10 @@ final class WalkthroughTests: XCTestCase {
         if app.menuItems["Select All"].waitForExistence(timeout: 2) { app.menuItems["Select All"].tap() }
         name.typeText("Arms")
         app.buttons["addToDay"].tap()
-        XCTAssertTrue(app.staticTexts["Dumbbell curl"].waitForExistence(timeout: 5))
-        app.staticTexts["Dumbbell curl"].tap()
+        search(app, "dumbell curl")
+        XCTAssertTrue(app.buttons["add-db_curl"].waitForExistence(timeout: 5))
+        shot("17a-search-typo")
+        app.buttons["add-db_curl"].tap()
         XCTAssertTrue(app.buttons["addToDay"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Dumbbell curl"].exists)
         shot("17-day-editor")
@@ -258,8 +260,9 @@ final class WalkthroughTests: XCTestCase {
         // Add an exercise for equipment this gym does not have ticked yet: it is ticked and added.
         app.buttons["addMenu"].tap()
         app.buttons["Add an exercise"].tap()
+        search(app, "ez preacher")
         let preacher = app.buttons["addNew-ez_preacher"]
-        for _ in 0..<8 where !preacher.isHittable { app.swipeUp() }
+        XCTAssertTrue(preacher.waitForExistence(timeout: 5))
         shot("22-add-unticked")
         preacher.tap()
         XCTAssertTrue(app.staticTexts["EZ-bar preacher curl"].waitForExistence(timeout: 10))
@@ -329,9 +332,9 @@ final class WalkthroughTests: XCTestCase {
         app.swipeDown()
         app.buttons["addMenu"].tap()
         app.buttons["Add an exercise"].tap()
+        search(app, "chest press machine")
         let press = app.buttons["add-machine_chest_press"]
         XCTAssertTrue(press.waitForExistence(timeout: 5))
-        for _ in 0..<6 where !press.isHittable { app.swipeUp() }
         XCTAssertTrue(press.label.contains("Same job as"), press.label)
         shot("32-add-sheet-warning")
         press.tap()
@@ -421,6 +424,38 @@ final class WalkthroughTests: XCTestCase {
             shot("54-\(label)-later-set")
             app.terminate()
         }
+    }
+
+    /// The library: open a muscle group, then search.
+    @MainActor
+    func testExerciseLibrary() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-demoData"]
+        app.launch()
+        XCTAssertTrue(app.buttons["startWorkout"].waitForExistence(timeout: 30))
+        app.buttons["startWorkout"].tap()
+        XCTAssertTrue(app.buttons["logSet"].waitForExistence(timeout: 10))
+        app.buttons["addMenu"].tap()
+        app.buttons["Add an exercise"].tap()
+        XCTAssertTrue(app.textFields["exerciseSearch"].waitForExistence(timeout: 5))
+        shot("60-library-home")
+        app.buttons["group-legs"].tap()
+        XCTAssertTrue(app.buttons["filter-Machine"].waitForExistence(timeout: 5))
+        shot("61-library-legs")
+        app.buttons["filter-Machine"].tap()
+        shot("62-library-legs-machines")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        search(app, "lat pull down")
+        XCTAssertTrue(app.buttons["add-lat_pulldown"].waitForExistence(timeout: 5))
+        shot("63-library-search")
+    }
+
+    @MainActor
+    private func search(_ app: XCUIApplication, _ text: String) {
+        let field = app.textFields["exerciseSearch"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(text)
     }
 
     private func shot(_ name: String) {

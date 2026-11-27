@@ -52,6 +52,8 @@ struct LoggingView: View {
     @State private var openExplanations: Set<PersistentIdentifier> = []
     /// Exercises whose form tips are open. Closed by default.
     @State private var openTips: Set<PersistentIdentifier> = []
+    /// Exercises whose same-job warning is open. One line by default.
+    @State private var openOverlaps: Set<PersistentIdentifier> = []
     /// The machine whose settings (seat, pads) are being edited, and the text so far.
     @State private var editingNotes: Equipment?
     @State private var notesDraft = ""
@@ -266,57 +268,38 @@ struct LoggingView: View {
     @ViewBuilder
     private func exerciseBody(_ entry: ExerciseEntry, entries: [ExerciseEntry], position: Int, history: History) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(entry.name)
-                        .scaledFont(30, weight: .heavy, design: .rounded)
-                        // With larger text, two lines at most: shrink rather than split "Dumbbell" in half.
-                        // At the normal size it wraps as it always did.
-                        .lineLimit(dynamicTypeSize > .large ? 2 : nil)
-                        .minimumScaleFactor(0.5)
-                        .tracking(-0.5)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityAddTraits(.isHeader)
-                    Text(subtitle(entry))
-                        .scaledFont(14)
-                        .foregroundStyle(Theme.muted)
-                    stepMenu(entry)
-                    machineNotes(entry)
-                    if let partner = workout.partner(of: entry) {
-                        Label("Superset with \(partner.name) · alternate sets", systemImage: "link")
-                            .scaledFont(13, weight: .semibold)
-                            .foregroundStyle(Theme.volt)
-                            .accessibilityIdentifier("supersetLabel")
+            VStack(alignment: .leading, spacing: 6) {
+                Text(entry.name)
+                    .scaledFont(30, weight: .heavy, design: .rounded)
+                    // With larger text, two lines at most: shrink rather than split "Dumbbell" in half.
+                    // At the normal size it wraps as it always did.
+                    .lineLimit(dynamicTypeSize > .large ? 2 : nil)
+                    .minimumScaleFactor(0.5)
+                    .tracking(-0.5)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                Text(subtitle(entry))
+                    .scaledFont(14)
+                    .foregroundStyle(Theme.muted)
+                // Everything you might change about this exercise, on one line.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        exerciseActions(entry, entries: entries)
                     }
                 }
-                Spacer(minLength: 0)
-                VStack(alignment: .trailing, spacing: 8) {
-                    Button { swapping = entry } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.left.arrow.right")
-                            Text("Swap")
-                        }
-                    }
-                    .buttonStyle(ChipButtonStyle(foreground: Theme.volt))
-                    .accessibilityLabel("Swap \(entry.name) for an equivalent exercise")
-                    .accessibilityIdentifier("swapExercise")
-                    if !entry.isDone, entries.contains(where: { $0.id != entry.id && !$0.isDone }) {
-                        Button {
-                            withAnimation { Store.moveToEnd(entry, in: workout, context: context) }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "clock.arrow.circlepath")
-                                Text("Later")
-                            }
-                        }
-                        .buttonStyle(ChipButtonStyle())
-                        .accessibilityLabel("Do \(entry.name) later. Moves it to the end of the workout")
-                        .accessibilityIdentifier("doLater")
-                    }
+                .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+                machineNotes(entry)
+                if let partner = workout.partner(of: entry) {
+                    Label("Superset with \(partner.name) · alternate sets", systemImage: "link")
+                        .scaledFont(13, weight: .semibold)
+                        .foregroundStyle(Theme.volt)
+                        .lineLimit(1)
+                        .accessibilityIdentifier("supersetLabel")
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Why today's targets: two lines at first, so the set you are doing stays in view. Tap for the rest.
+            // Why today's targets: one line at first, so the set you are doing stays in view. Tap for the rest.
             let explained = openExplanations.contains(entry.persistentModelID)
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -332,7 +315,7 @@ struct LoggingView: View {
                         .scaledFont(14)
                         .foregroundStyle(Color(hex: 0xDDE8C2))
                         .multilineTextAlignment(.leading)
-                        .lineLimit(explained ? nil : 2)
+                        .lineLimit(explained ? nil : 1)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }
@@ -369,7 +352,7 @@ struct LoggingView: View {
                     .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.line, lineWidth: 1))
                     .buttonStyle(.plain)
                 if !usedEffort, !entry.completedSets.isEmpty {
-                    Text("Tip: press and hold a done set to mark it easy, hard or failed. It's optional, and it fine-tunes the next suggestion.")
+                    Text("Tip: press and hold a done set to say how it felt.")
                         .scaledFont(12)
                         .foregroundStyle(Theme.muted)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -394,6 +377,28 @@ struct LoggingView: View {
         }
     }
 
+    /// Swap, Later and the weight step, as small chips in one row.
+    @ViewBuilder
+    private func exerciseActions(_ entry: ExerciseEntry, entries: [ExerciseEntry]) -> some View {
+        Button { swapping = entry } label: {
+            Label("Swap", systemImage: "arrow.left.arrow.right")
+        }
+        .buttonStyle(SmallChipStyle(foreground: Theme.volt))
+        .accessibilityLabel("Swap \(entry.name) for an equivalent exercise")
+        .accessibilityIdentifier("swapExercise")
+        if !entry.isDone, entries.contains(where: { $0.id != entry.id && !$0.isDone }) {
+            Button {
+                withAnimation { Store.moveToEnd(entry, in: workout, context: context) }
+            } label: {
+                Label("Later", systemImage: "clock.arrow.circlepath")
+            }
+            .buttonStyle(SmallChipStyle())
+            .accessibilityLabel("Do \(entry.name) later. Moves it to the end of the workout")
+            .accessibilityIdentifier("doLater")
+        }
+        stepMenu(entry)
+    }
+
     /// Your settings for this machine at this gym ("Seat 4, back pad 2"). Machines only.
     @ViewBuilder
     private func machineNotes(_ entry: ExerciseEntry) -> some View {
@@ -407,8 +412,7 @@ struct LoggingView: View {
                       systemImage: machine.notes.isEmpty ? "plus.circle" : "slider.horizontal.3")
                     .scaledFont(13, weight: .semibold)
                     .foregroundStyle(machine.notes.isEmpty ? Theme.muted : Theme.text)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
+                    .lineLimit(1)
                     .frame(minHeight: 28, alignment: .leading)
                     .contentShape(Rectangle())
             }
@@ -419,17 +423,39 @@ struct LoggingView: View {
     }
 
     /// Heads-up when this exercise repeats the job of one done earlier in the workout.
+    /// One line at first; tap it for why, and to swap or keep both.
     private func overlapCard(_ overlap: Overlap, entry: ExerciseEntry) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.2")
-                .scaledFont(14, weight: .heavy)
-                .foregroundStyle(Theme.amber)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(overlap.message)
-                    .scaledFont(14)
-                    .foregroundStyle(Theme.text)
-                    .fixedSize(horizontal: false, vertical: true)
+        let open = openOverlaps.contains(entry.persistentModelID)
+        return VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if open { openOverlaps.remove(entry.persistentModelID) } else { openOverlaps.insert(entry.persistentModelID) }
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.2")
+                        .scaledFont(14, weight: .heavy)
+                        .foregroundStyle(Theme.amber)
+                        .accessibilityHidden(true)
+                    Text(open ? overlap.message : "Same job as \(overlap.other.name)")
+                        .scaledFont(14)
+                        .foregroundStyle(Theme.text)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(open ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.down")
+                        .scaledFont(12, weight: .heavy)
+                        .foregroundStyle(Theme.muted)
+                        .rotationEffect(.degrees(open ? 180 : 0))
+                }
+                .frame(minHeight: 28)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(open ? overlap.message : "\(overlap.message) Show choices")
+            .accessibilityIdentifier("overlapToggle")
+            if open {
                 HStack(spacing: 18) {
                     if !entry.isDone {
                         Button("Swap it") { swapping = entry }
@@ -444,8 +470,8 @@ struct LoggingView: View {
                 .foregroundStyle(Theme.amber)
                 .buttonStyle(.plain)
                 .frame(minHeight: 32)
+                .padding(.leading, 24)
             }
-            Spacer(minLength: 0)
         }
         .card(padding: 12, radius: 16, color: Theme.amberDim)
         .accessibilityElement(children: .contain)
@@ -527,9 +553,7 @@ struct LoggingView: View {
                 Text("\(Fmt.lb(entry.increment)) steps")
                 Image(systemName: "chevron.down").scaledFont(10, weight: .heavy)
             }
-            .scaledFont(14, weight: .semibold)
-            .foregroundStyle(Theme.volt)
-            .frame(minHeight: 30)
+            .modifier(SmallChipLook(foreground: Theme.volt))
         }
         .accessibilityLabel("Weight steps: \(Fmt.weight(entry.increment)) \(Units.spoken). Change")
         .accessibilityIdentifier("stepMenu")

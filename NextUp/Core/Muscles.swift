@@ -206,6 +206,15 @@ struct Overlap: Equatable {
         case "abs_flex": return "crunches"
         case "abs_leg": return "leg raises"
         case "abs_rot": return "twisting crunches"
+        case "dpress": return "decline presses"
+        case "cg_press": return "close-grip presses"
+        case "shrug": return "shrugs"
+        case "upright": return "upright rows"
+        case "front_raise": return "front raises"
+        case "hip_thrust": return "hip thrusts"
+        case "kickback": return "glute kickbacks"
+        case "abduct": return "hip abductions"
+        case "adduct": return "hip adductions"
         default: return nil
         }
     }
@@ -233,7 +242,7 @@ enum MuscleParts {
 
     static func hasParts(_ muscle: Muscle) -> Bool { !parts(of: muscle).isEmpty }
 
-    /// Parts worth a reminder when missed. Lower chest is optional: dips are the only thing here that targets it.
+    /// Parts worth a reminder when missed. Lower chest is optional: only dips and decline presses target it.
     static func isKey(_ part: String, of muscle: Muscle) -> Bool { !(muscle == .chest && part == "Lower") }
 
     /// "Upper chest", "Triceps long head", "Brachialis", "Side delts".
@@ -258,6 +267,10 @@ enum MuscleParts {
         case "hammer": return [MusclePart(muscle: .biceps, name: "Brachialis")]
         case "vpress": return [MusclePart(muscle: .delts, name: "Front")]
         case "lateral": return [MusclePart(muscle: .delts, name: "Side")]
+        case "upright": return [MusclePart(muscle: .delts, name: "Side")]
+        case "front_raise": return [MusclePart(muscle: .delts, name: "Front")]
+        case "dpress": return [MusclePart(muscle: .chest, name: "Lower")]
+        case "cg_press": return [MusclePart(muscle: .triceps, name: "Outer heads")]
         default: return []
         }
     }

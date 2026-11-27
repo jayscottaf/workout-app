@@ -463,7 +463,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Next Up";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Next Up shows your runs, walks and body weight from Apple Health next to your lifting.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Next Up shows your cardio workouts (runs, walks, rides, elliptical, stairs and more) and body weight from Apple Health next to your lifting.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Next Up saves each lifting session to Apple Health as a strength workout.";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
@@ -500,7 +500,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Next Up";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Next Up shows your runs, walks and body weight from Apple Health next to your lifting.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Next Up shows your cardio workouts (runs, walks, rides, elliptical, stairs and more) and body weight from Apple Health next to your lifting.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Next Up saves each lifting session to Apple Health as a strength workout.";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;

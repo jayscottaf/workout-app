@@ -93,7 +93,10 @@ enum EquipmentCatalog {
 
     static var all: [EquipmentType] { builtIn + custom }
 
-    static let builtIn: [EquipmentType] = [
+    static let builtIn: [EquipmentType] = core + more
+
+    /// The everyday equipment. More is in CatalogMore.swift.
+    static let core: [EquipmentType] = [
         EquipmentType(id: "dumbbells", name: "Dumbbells", category: .freeWeight, defaultIncrement: 5, loading: "Free weight"),
         EquipmentType(id: "barbell", name: "Barbell and plates", category: .freeWeight, defaultIncrement: 5, loading: "Free weight"),
         EquipmentType(id: "ezBar", name: "EZ curl bar (bent bar)", category: .freeWeight, defaultIncrement: 5,
@@ -173,7 +176,11 @@ enum ExerciseCatalog {
 
     static var all: [ExerciseDef] { builtIn + custom }
 
-    static let builtIn: [ExerciseDef] = [
+    /// Everyday exercises first, then the rest of the library (CatalogMore.swift).
+    static let builtIn: [ExerciseDef] = core + more
+
+    /// The everyday set the app started with. Routines and suggestions lean on these first.
+    static let core: [ExerciseDef] = [
         // Chest
         ex("db_bench", "Dumbbell bench press", .chest, [.triceps, .delts], "dumbbells", "hpress", 8, 12, compound: true, start: 30),
         ex("bb_bench", "Barbell bench press", .chest, [.triceps, .delts], "barbell", "hpress", 6, 10, compound: true, start: 95),

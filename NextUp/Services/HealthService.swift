@@ -1,18 +1,19 @@
 import Foundation
 import HealthKit
 
-/// A run or walk read from Apple Health.
+/// A cardio workout read from Apple Health: a run, walk, ride, elliptical, stairs, hike and so on.
 struct CardioItem: Identifiable {
     let id: UUID
     let date: Date
-    let isRun: Bool
+    let kind: CardioKind
     let minutes: Double
     let miles: Double?
 
+    var isRun: Bool { kind == .run }
+
     var title: String {
-        let kind = isRun ? "Run" : "Walk"
-        if let miles, miles > 0 { return "\(kind) · \(String(format: "%.1f", miles)) mi" }
-        return kind
+        if let miles, miles > 0 { return "\(kind.title) · \(String(format: "%.1f", miles)) mi" }
+        return kind.title
     }
 
     var durationText: String {
@@ -21,7 +22,7 @@ struct CardioItem: Identifiable {
     }
 }
 
-/// Apple Health: reads runs, walks and body weight; writes lifting sessions back.
+/// Apple Health: reads cardio workouts and body weight; writes lifting sessions back.
 @MainActor
 final class HealthService: ObservableObject {
     @Published var cardio: [CardioItem] = []
@@ -49,6 +50,8 @@ final class HealthService: ObservableObject {
             HKObjectType.workoutType(),
             HKQuantityType(.bodyMass),
             HKQuantityType(.distanceWalkingRunning),
+            HKQuantityType(.distanceCycling),
+            HKQuantityType(.distanceSwimming),
         ]
         let share: Set<HKSampleType> = [HKObjectType.workoutType()]
         do {
@@ -104,22 +107,32 @@ final class HealthService: ObservableObject {
 
     // MARK: queries
 
+    /// Apple Health workout types shown as cardio. Indoor and outdoor runs are both `.running`.
+    static let cardioTypes: [HKWorkoutActivityType: CardioKind] = [
+        .running: .run, .walking: .walk, .cycling: .cycle, .handCycling: .cycle,
+        .elliptical: .elliptical, .stairClimbing: .stairs, .stairs: .stairs, .stepTraining: .stairs,
+        .hiking: .hike, .rowing: .row, .swimming: .swim,
+        .highIntensityIntervalTraining: .hiit, .mixedCardio: .other, .crossCountrySkiing: .other,
+        .jumpRope: .other, .cardioDance: .other,
+    ]
+
     private func fetchCardio() async throws -> [CardioItem] {
         let start = Calendar.current.date(byAdding: .day, value: -120, to: Date())
-        let kinds = NSCompoundPredicate(orPredicateWithSubpredicates: [
-            HKQuery.predicateForWorkouts(with: .running),
-            HKQuery.predicateForWorkouts(with: .walking),
-        ])
+        let kinds = NSCompoundPredicate(orPredicateWithSubpredicates:
+            Self.cardioTypes.keys.map { HKQuery.predicateForWorkouts(with: $0) })
         let dates = HKQuery.predicateForSamples(withStart: start, end: nil, options: [])
         let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [kinds, dates])
-        let samples = try await run(type: HKObjectType.workoutType(), predicate: predicate, limit: 200)
-        let distance = HKQuantityType(.distanceWalkingRunning)
+        let samples = try await run(type: HKObjectType.workoutType(), predicate: predicate, limit: 300)
+        let distances = [HKQuantityType(.distanceWalkingRunning), HKQuantityType(.distanceCycling), HKQuantityType(.distanceSwimming)]
         return samples.compactMap { $0 as? HKWorkout }.map { workout in
-            CardioItem(id: workout.uuid,
-                       date: workout.startDate,
-                       isRun: workout.workoutActivityType == .running,
-                       minutes: workout.duration / 60,
-                       miles: workout.statistics(for: distance)?.sumQuantity()?.doubleValue(for: .mile()))
+            let miles = distances.lazy
+                .compactMap { workout.statistics(for: $0)?.sumQuantity()?.doubleValue(for: .mile()) }
+                .first { $0 > 0 }
+            return CardioItem(id: workout.uuid,
+                              date: workout.startDate,
+                              kind: Self.cardioTypes[workout.workoutActivityType] ?? .other,
+                              minutes: workout.duration / 60,
+                              miles: miles)
         }
     }
 

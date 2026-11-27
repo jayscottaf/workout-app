@@ -30,7 +30,7 @@ Arguments → add `-demoData`.
 | Your own exercises and machines | Not on the list? "Create your own" under Add an exercise makes a new exercise (name, muscle, what it uses, rep range), and "Add a machine that is not listed" makes a new machine. Both then work like built-in ones: suggestions, records, swaps, per-gym equipment and the Watch. Manage them in Settings. |
 | 20-minute version | Four biggest moves of the day, two sets each, shorter rest. |
 | Progress | Personal records, estimated strength chart, weekly sets per muscle group, calendar, monthly recap. |
-| Apple Health | Reads runs, walks and body weight. Saves each lifting session as a strength workout. |
+| Apple Health | Reads cardio workouts (runs, walks, rides, elliptical, stairs, hikes and more) and body weight; cardio can count toward the weekly goal. Saves each lifting session as a strength workout. |
 | Streak | Counts weeks where you hit your weekly goal (default 3), not days. |
 | Pounds or kilograms | Settings → Units. Weights are always saved in pounds, so switching never changes your history; what is shown and typed, the plates (20 kg bar, kilogram plates) and the weight steps (5 lb ↔ 2.5 kg) follow the choice, on the phone and the Watch. |
 | Export | Settings → Export workouts (CSV) makes a spreadsheet of every logged set, to save to Files, AirDrop or email as a backup. |

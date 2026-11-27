@@ -123,6 +123,38 @@ struct ChipButtonStyle: ButtonStyle {
     }
 }
 
+/// The look of a small chip: one line, a slim capsule, still 42pt tall to tap.
+struct SmallChipLook: ViewModifier {
+    var fill: Color = Theme.surface
+    var foreground: Color = Theme.text
+
+    func body(content: Content) -> some View {
+        content
+            .scaledFont(15, weight: .semibold)
+            .lineLimit(1)
+            .fixedSize()
+            .foregroundStyle(foreground)
+            .padding(.horizontal, 12)
+            .frame(minHeight: 34)
+            .background(fill, in: Capsule())
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+    }
+}
+
+/// A smaller chip for actions that sit in one row under a title.
+struct SmallChipStyle: ButtonStyle {
+    var fill: Color = Theme.surface
+    var foreground: Color = Theme.text
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .labelStyle(.titleAndIcon)
+            .modifier(SmallChipLook(fill: fill, foreground: foreground))
+            .opacity(configuration.isPressed ? 0.7 : 1)
+    }
+}
+
 /// Round 44pt icon button (plus, minus, etc).
 struct CircleIconButton: View {
     let systemName: String

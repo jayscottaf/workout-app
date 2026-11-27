@@ -97,12 +97,22 @@ enum Progression {
 
         // Top of the range on every set: go up one step.
         if last.sets.allSatisfy({ $0.reps >= high }) {
+            // You marked a set as failed: make this weight solid before moving on.
+            if last.sets.contains(where: { $0.effort == .failed }) {
+                let targets = last.sets.map { SetTarget(weight: $0.weight, reps: high, lastWeight: $0.weight, lastReps: $0.reps) }
+                return Suggestion(kind: .hold, targets: targets,
+                                  explanation: "You reached \(high) reps but marked a set as failed, so today stays at \(Fmt.lb(last.topWeight)). Get \(high) clean reps on every set to move up.")
+            }
+            // Every set marked easy: two steps instead of one.
+            let steps = last.sets.allSatisfy({ $0.effort == .easy }) ? 2.0 : 1.0
             let targets = last.sets.map {
-                SetTarget(weight: roundTo($0.weight + increment, increment), reps: low, lastWeight: $0.weight, lastReps: $0.reps)
+                SetTarget(weight: roundTo($0.weight + increment * steps, increment), reps: low, lastWeight: $0.weight, lastReps: $0.reps)
             }
             let newTop = targets.map(\.weight).max() ?? 0
-            return Suggestion(kind: .increase, targets: targets,
-                              explanation: "You hit \(high) reps on every set last time, so today moves up to \(Fmt.lb(newTop)). Aim for \(low) or more.")
+            let why = steps > 1
+                ? "You hit \(high) reps on every set last time and marked them all easy, so today jumps two steps to \(Fmt.lb(newTop))."
+                : "You hit \(high) reps on every set last time, so today moves up to \(Fmt.lb(newTop))."
+            return Suggestion(kind: .increase, targets: targets, explanation: why + " Aim for \(low) or more.")
         }
 
         // Two misses in a row: hold, or back off if reps fell under the range.

@@ -4,6 +4,8 @@ import SwiftData
 /// Fix a workout after the fact: change the weight or reps of a set, or remove a set logged by mistake.
 /// When it closes, personal records are worked out again across all workouts.
 struct EditWorkoutSheet: View {
+    /// Redraws every weight when pounds or kilograms is changed in Settings.
+    @AppStorage(Units.key) private var weightUnit = WeightUnit.lb.rawValue
     let workout: Workout
 
     @Environment(\.modelContext) private var context
@@ -18,10 +20,10 @@ struct EditWorkoutSheet: View {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Edit workout")
-                            .font(Theme.rounded(26))
+                            .scaledFont(26, weight: .heavy, design: .rounded)
                             .accessibilityAddTraits(.isHeader)
                         Text("Tap a set to change it.")
-                            .font(.system(size: 14))
+                            .scaledFont(14)
                             .foregroundStyle(Theme.muted)
                     }
                     Spacer()
@@ -32,7 +34,7 @@ struct EditWorkoutSheet: View {
 
                 ForEach(workout.sortedEntries) { entry in
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(entry.name).font(.system(size: 16, weight: .bold))
+                        Text(entry.name).scaledFont(16, weight: .bold)
                         ForEach(entry.completedSets) { set in
                             if editing == set.id {
                                 editor(set, entry: entry)
@@ -54,22 +56,22 @@ struct EditWorkoutSheet: View {
     }
 
     private func label(_ set: SetEntry) -> String {
-        set.weight > 0 ? "\(Fmt.weight(set.weight)) lb × \(set.reps)" : "\(set.reps) reps"
+        set.weight > 0 ? "\(Fmt.lb(set.weight)) × \(set.reps)" : "\(set.reps) reps"
     }
 
     private func row(_ set: SetEntry) -> some View {
         Button { editing = set.id } label: {
             HStack(spacing: 14) {
                 Text("\(set.index + 1)")
-                    .font(.system(size: 13, weight: .bold))
+                    .scaledFont(13, weight: .bold)
                     .foregroundStyle(Theme.muted)
                     .frame(width: 22, alignment: .leading)
                 Text(label(set))
-                    .font(Theme.rounded(19, .bold))
+                    .scaledFont(19, weight: .bold, design: .rounded)
                     .monospacedDigit()
                 Spacer(minLength: 0)
                 Image(systemName: "pencil")
-                    .font(.system(size: 14, weight: .bold))
+                    .scaledFont(14, weight: .bold)
                     .foregroundStyle(Theme.muted)
             }
             .padding(.horizontal, 14)
@@ -86,7 +88,7 @@ struct EditWorkoutSheet: View {
     private func editor(_ set: SetEntry, entry: ExerciseEntry) -> some View {
         VStack(spacing: 10) {
             HStack(spacing: 8) {
-                stepper(value: set.weight <= 0 ? "BW" : Fmt.weight(set.weight), unit: set.weight <= 0 ? "body weight" : "lb",
+                stepper(value: set.weight <= 0 ? "BW" : Fmt.weight(set.weight), unit: set.weight <= 0 ? "body weight" : Units.symbol,
                         lessLabel: "Lower weight", moreLabel: "Raise weight",
                         less: { set.weight = max(0, set.weight - entry.increment) },
                         more: { set.weight += entry.increment },
@@ -117,7 +119,7 @@ struct EditWorkoutSheet: View {
                          less: @escaping () -> Void, more: @escaping () -> Void,
                          type typeLabel: String? = nil, onType: (() -> Void)? = nil) -> some View {
         HStack(spacing: 0) {
-            CircleIconButton(systemName: "minus", label: lessLabel, fill: Theme.line) {
+            CircleIconButton(systemName: "minus", label: lessLabel, fill: Theme.line, repeats: true) {
                 less()
                 changed = true
                 Haptics.tap()
@@ -125,18 +127,18 @@ struct EditWorkoutSheet: View {
             TypeableValue(label: typeLabel, onType: onType) {
                 VStack(spacing: 0) {
                     Text(value)
-                        .font(Theme.rounded(26))
+                        .scaledFont(26, weight: .heavy, design: .rounded)
                         .monospacedDigit()
                         .minimumScaleFactor(0.6)
                         .lineLimit(1)
                     Text(unit)
-                        .font(.system(size: 12, weight: .semibold))
+                        .scaledFont(12, weight: .semibold)
                         .foregroundStyle(Theme.muted)
                         .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity)
             }
-            CircleIconButton(systemName: "plus", label: moreLabel, fill: Theme.line) {
+            CircleIconButton(systemName: "plus", label: moreLabel, fill: Theme.line, repeats: true) {
                 more()
                 changed = true
                 Haptics.tap()

@@ -178,12 +178,12 @@ struct LogPage: View {
 
             HStack(spacing: 6) {
                 box(value: weight <= 0 ? "BW" : Look.weight(weight),
-                    unit: weight <= 0 ? "body" : "lb · ±\(Look.weight(step(entry)))", active: focus == .weight)
+                    unit: weight <= 0 ? "body" : "\(Units.symbol) · ±\(Look.weight(step(entry)))", active: focus == .weight)
                     .focusable()
                     .focused($focus, equals: .weight)
                     .digitalCrownRotation($crown, from: 0, through: 1500, by: step(entry),
                                           sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
-                    .accessibilityLabel(weight <= 0 ? "Body weight" : "\(Look.weight(weight)) pounds")
+                    .accessibilityLabel(weight <= 0 ? "Body weight" : "\(Look.weight(weight)) \(Units.spoken)")
                     .accessibilityHint("Turn the crown to change the weight")
                 box(value: "\(Int(reps))", unit: "reps", active: focus == .reps)
                     .focusable()
@@ -313,7 +313,7 @@ struct LogPage: View {
         }
     }
 
-    private static let steps: [Double] = [2.5, 5, 10]
+    private static var steps: [Double] { Units.stepChoices() }
 
     /// Opened from the top line: weight steps and Later for this exercise, every exercise, and Add.
     private var exerciseList: some View {
@@ -337,7 +337,7 @@ struct LogPage: View {
                                                 .background(chosen ? Look.volt : Look.surface2, in: Capsule())
                                         }
                                         .buttonStyle(.plain)
-                                        .accessibilityLabel("\(Look.weight(value)) pound steps\(chosen ? ", chosen" : "")")
+                                        .accessibilityLabel("\(Look.weight(value)) \(Units.isKg ? "kilogram" : "pound") steps\(chosen ? ", chosen" : "")")
                                     }
                                 }
                             }

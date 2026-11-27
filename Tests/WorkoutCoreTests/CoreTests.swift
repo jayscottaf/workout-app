@@ -448,3 +448,187 @@ final class TypedWeightTests: XCTestCase {
         XCTAssertNil(Fmt.parseWeight("5000"))
     }
 }
+
+final class ExportTests: XCTestCase {
+    private let utc = TimeZone(identifier: "UTC")!
+
+    private func set(_ minutes: Double, _ exercise: String = "Bench press", n: Int = 1, weight: Double = 135, reps: Int = 8,
+                     pr: PRKind? = nil) -> ExportSet {
+        ExportSet(date: now.addingTimeInterval(minutes * 60), workout: "Chest & triceps", gym: "Home", exercise: exercise,
+                  muscle: "Chest", compound: true, equipment: "Barbell", setNumber: n, weight: weight, reps: reps, pr: pr)
+    }
+
+    func testHeaderAndOneRowPerSet() {
+        let lines = Export.csv([set(0), set(2, n: 2, reps: 7)], timeZone: utc).components(separatedBy: "\r\n")
+        XCTAssertEqual(lines[0], "Date,Workout,Gym,Exercise,Muscle,Compound,Equipment,Set,Weight (lb),Reps,Volume (lb),Personal record")
+        XCTAssertEqual(lines.count, 4) // header, two sets, final empty line
+        XCTAssertTrue(lines[1].hasSuffix(",Chest & triceps,Home,Bench press,Chest,Yes,Barbell,1,135,8,1080,"))
+        XCTAssertTrue(lines[2].contains(",2,135,7,945,"))
+    }
+
+    func testOldestFirstAndBodyWeight() {
+        let csv = Export.csv([set(60, "Dips", weight: 0, reps: 12, pr: .reps), set(0)], timeZone: utc)
+        let lines = csv.components(separatedBy: "\r\n")
+        XCTAssertTrue(lines[1].contains("Bench press"))
+        XCTAssertTrue(lines[2].hasSuffix(",Dips,Chest,Yes,Barbell,1,Body weight,12,0,Most reps"))
+    }
+
+    func testQuotingAndFormulaSafety() {
+        XCTAssertEqual(Export.field("Plain"), "Plain")
+        XCTAssertEqual(Export.field("Row, cable"), "\"Row, cable\"")
+        XCTAssertEqual(Export.field("6\" grip"), "\"6\"\" grip\"")
+        XCTAssertEqual(Export.field("=SUM(A1)"), "'=SUM(A1)")
+    }
+
+    func testFileName() {
+        XCTAssertTrue(Export.fileName(on: now, timeZone: utc).hasPrefix("Next Up workouts 20"))
+        XCTAssertTrue(Export.fileName(on: now, timeZone: utc).hasSuffix(".csv"))
+    }
+}
+
+final class UnitsTests: XCTestCase {
+    override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: Units.key)
+        super.tearDown()
+    }
+
+    func testPoundsByDefault() {
+        XCTAssertEqual(Units.current, .lb)
+        XCTAssertEqual(Fmt.lb(135), "135 lb")
+        XCTAssertEqual(Units.stepChoices(), [2.5, 5, 10])
+    }
+
+    func testKilogramsShowWithoutChangingSavedPounds() {
+        Units.current = .kg
+        XCTAssertEqual(Fmt.lb(100 * Units.lbPerKg), "100 kg")
+        XCTAssertEqual(Fmt.lb(Units.step(2.5)), "1.25 kg")
+        XCTAssertEqual(Fmt.weight(135), "61.2")
+    }
+
+    func testTypedKilogramsAreSavedAsPounds() {
+        Units.current = .kg
+        XCTAssertEqual(Fmt.parseWeight("100")!, 100 * Units.lbPerKg, accuracy: 0.0001)
+        XCTAssertEqual(Fmt.parseWeight("225 lb"), 225)
+        XCTAssertNil(Fmt.parseWeight("1000"))
+        Units.current = .lb
+        XCTAssertEqual(Fmt.parseWeight("50 kg")!, 50 * Units.lbPerKg, accuracy: 0.0001)
+    }
+
+    func testStepsMoveBetweenGrids() {
+        XCTAssertEqual(Units.convertStep(5, from: .lb, to: .kg), Units.step(5, in: .kg))
+        XCTAssertEqual(Units.convertStep(Units.step(5, in: .kg), from: .kg, to: .lb), 5)
+        XCTAssertEqual(Units.convertStep(Units.step(2.5, in: .kg), from: .kg, to: .lb), 2.5)
+    }
+
+    func testKilogramPlatesOnA20KgBar() {
+        Units.current = .kg
+        XCTAssertEqual(Plates.text(total: 100 * Units.lbPerKg, bar: Plates.barWeight), "Each side: 25 + 15")
+        XCTAssertEqual(Plates.text(total: 20 * Units.lbPerKg, bar: Plates.barWeight), "Just the bar")
+        XCTAssertEqual(Plates.text(total: 62.5 * Units.lbPerKg, bar: Plates.barWeight), "Each side: 20 + 1.25")
+    }
+
+    func testExportUsesTheChosenUnit() {
+        let set = ExportSet(date: Date(timeIntervalSince1970: 0), workout: "W", gym: "G", exercise: "Squat", muscle: "Quads",
+                            compound: true, equipment: "Barbell", setNumber: 1, weight: 100 * Units.lbPerKg, reps: 5, pr: nil)
+        let csv = Export.csv([set], unit: .kg, timeZone: TimeZone(identifier: "UTC")!)
+        XCTAssertTrue(csv.contains("Weight (kg)"))
+        XCTAssertTrue(csv.contains(",1,100,5,500,"))
+    }
+}
+
+final class EffortTests: XCTestCase {
+    private func top(_ efforts: [Effort?]) -> Session {
+        Session(date: ago(3), sets: efforts.map { SetRecord(weight: 120, reps: 12, effort: $0) })
+    }
+
+    func testAFailedSetHoldsTheWeightEvenAtTheTopOfTheRange() {
+        let s = suggest([top([nil, nil, .failed])])
+        XCTAssertEqual(s.kind, .hold)
+        XCTAssertEqual(s.targets.map(\.weight), [120, 120, 120])
+        XCTAssertTrue(s.explanation.contains("failed"))
+    }
+
+    func testAllEasyJumpsTwoSteps() {
+        let s = suggest([top([.easy, .easy, .easy])])
+        XCTAssertEqual(s.kind, .increase)
+        XCTAssertEqual(s.targets.map(\.weight), [130, 130, 130])
+    }
+
+    func testSomeEasyIsStillOneStep() {
+        XCTAssertEqual(suggest([top([.easy, nil, .hard])]).targets.map(\.weight), [125, 125, 125])
+    }
+}
+
+final class ImportTests: XCTestCase {
+    private let utc = TimeZone(identifier: "UTC")!
+
+    func testReadsAStrongExport() throws {
+        let csv = """
+        Date,Workout Name,Duration,Exercise Name,Set Order,Weight,Reps,Distance,Seconds,Notes,Workout Notes,RPE
+        2026-11-20 18:00:00,"Chest, tris",1h 5m,Bench Press (Barbell),1,135,10,0,0,,,
+        2026-11-20 18:00:00,"Chest, tris",1h 5m,Bench Press (Barbell),W,45,10,0,0,,,
+        2026-11-20 18:00:00,"Chest, tris",1h 5m,Bench Press (Barbell),2,135,8,0,0,,,
+        2026-11-20 18:00:00,"Chest, tris",1h 5m,Triceps Pushdown (Cable - Straight Bar),1,50,12,0,0,,,
+        2026-11-20 18:00:00,"Chest, tris",1h 5m,Rest Timer,Rest Timer,0,0,0,90,,,
+        2026-11-18 07:30:00,Legs,45m,Leg Press,1,200,12,0,0,,,
+
+        """
+        let (source, workouts) = try Import.read(csv, unit: .lb, timeZone: utc)
+        XCTAssertEqual(source, .strong)
+        XCTAssertEqual(workouts.map(\.title), ["Legs", "Chest, tris"])
+        let chest = workouts[1]
+        XCTAssertEqual(chest.exercises.map(\.name), ["Bench Press (Barbell)", "Triceps Pushdown (Cable - Straight Bar)"])
+        XCTAssertEqual(chest.exercises[0].sets, [ImportedSet(weight: 135, reps: 10), ImportedSet(weight: 135, reps: 8)])
+        XCTAssertEqual(chest.end.timeIntervalSince(chest.start), 65 * 60)
+    }
+
+    func testStrongInKilogramsIsSavedInPounds() throws {
+        let csv = "Date,Workout Name,Duration,Exercise Name,Set Order,Weight,Reps\n2026-11-20 18:00:00,A,30m,Squat (Barbell),1,100,5\n"
+        let (_, workouts) = try Import.read(csv, unit: .kg, timeZone: utc)
+        XCTAssertEqual(workouts[0].exercises[0].sets[0].weight, 220.5)
+    }
+
+    func testReadsAHevyExportAndSkipsWarmUps() throws {
+        let csv = """
+        "title","start_time","end_time","description","exercise_title","superset_id","exercise_notes","set_index","set_type","weight_kg","reps","distance_km","duration_seconds","rpe"
+        "Pull","20 Nov 2026, 18:00","20 Nov 2026, 19:10","","Lat Pulldown (Cable)","","","0","warmup","20","10","","",""
+        "Pull","20 Nov 2026, 18:00","20 Nov 2026, 19:10","","Lat Pulldown (Cable)","","","1","normal","50","10","","",""
+        "Pull","20 Nov 2026, 18:00","20 Nov 2026, 19:10","","Plank","","","0","normal","","","","60",""
+        """
+        let (source, workouts) = try Import.read(csv, unit: .lb, timeZone: utc)
+        XCTAssertEqual(source, .hevy)
+        XCTAssertEqual(workouts.count, 1)
+        XCTAssertEqual(workouts[0].exercises.count, 1)
+        XCTAssertEqual(workouts[0].exercises[0].sets, [ImportedSet(weight: 110.2, reps: 10)])
+        XCTAssertEqual(workouts[0].end.timeIntervalSince(workouts[0].start), 70 * 60)
+    }
+
+    func testSemicolonFiles() throws {
+        let csv = "Date;Workout Name;Duration;Exercise Name;Set Order;Weight;Reps\n2026-11-20 18:00:00;A;30m;Leg Press;1;100,5;5\n"
+        let (_, workouts) = try Import.read(csv, unit: .lb, timeZone: utc)
+        XCTAssertEqual(workouts[0].exercises[0].sets[0].weight, 100.5)
+    }
+
+    func testOtherFilesAreRefused() {
+        XCTAssertThrowsError(try Import.read("Name,Age\nA,3\n", unit: .lb)) { XCTAssertEqual($0 as? Import.Problem, .unknownFormat) }
+    }
+
+    func testNamesMatchBuiltInExercises() {
+        let expected = [
+            "Bench Press (Barbell)": "bb_bench", "Bench Press (Dumbbell)": "db_bench",
+            "Incline Bench Press (Dumbbell)": "incline_db_press", "Lat Pulldown (Cable)": "lat_pulldown",
+            "Bicep Curl (Dumbbell)": "db_curl", "Hammer Curl (Dumbbell)": "hammer_curl",
+            "Seated Row (Cable)": "cable_row", "Triceps Pushdown (Cable - Straight Bar)": "pushdown",
+            "Chest Press (Machine)": "machine_chest_press", "Shoulder Press (Dumbbell)": "db_ohp",
+            "Lateral Raise (Dumbbell)": "lateral_raise", "Squat (Barbell)": "bb_squat", "Leg Press": "leg_press",
+            "Leg Extension (Machine)": "leg_ext", "Romanian Deadlift (Dumbbell)": "db_rdl", "Pull Up": "pullup",
+            "Face Pull (Cable)": "face_pull", "Crunch": "crunch",
+        ]
+        for (name, id) in expected { XCTAssertEqual(Import.match(name), .builtIn(id), name) }
+    }
+
+    func testUnknownNamesBecomeYourOwnExercise() {
+        XCTAssertEqual(Import.match("Hip Thrust (Barbell)"), .custom(name: "Barbell hip thrust", muscle: .glutes, equipmentID: "barbell"))
+        XCTAssertEqual(Import.match("Zottman Curl"), .custom(name: "Zottman curl", muscle: .biceps, equipmentID: "bodyweight"))
+    }
+}

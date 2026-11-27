@@ -144,11 +144,11 @@ struct MonthlyRecap {
         var lines: [String] = []
         if workouts > 0 {
             lines.append("You lifted \(workouts) time\(workouts == 1 ? "" : "s") for \(sets) sets in total.")
-            lines.append("That is \(Int(volume).formatted()) lb moved.")
+            lines.append("That is \(Int(Units.shown(volume)).formatted()) \(Units.symbol) moved.")
         }
         if records > 0 { lines.append("You set \(records) personal record\(records == 1 ? "" : "s").") }
         if let bestGain, bestGain.gain >= 1 {
-            lines.append("Biggest gain: \(bestGain.name), up about \(Int(bestGain.gain.rounded())) lb in estimated strength.")
+            lines.append("Biggest gain: \(bestGain.name), up about \(Int(Units.shown(bestGain.gain).rounded())) \(Units.symbol) in estimated strength.")
         }
         if let topGroup { lines.append("Most-trained area: \(topGroup.title.lowercased()).") }
         if cardioSessions > 0 {

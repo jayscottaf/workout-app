@@ -53,9 +53,8 @@ enum Look {
         .system(size: size, weight: weight, design: .rounded)
     }
 
-    static func weight(_ value: Double) -> String {
-        value == value.rounded() ? String(Int(value)) : String(format: "%.1f", value)
-    }
+    /// A saved weight (pounds) in the unit chosen on the phone.
+    static func weight(_ value: Double) -> String { Units.number(value) }
 
     static func clock(_ interval: TimeInterval) -> String {
         let seconds = max(0, Int(interval.rounded(.up)))

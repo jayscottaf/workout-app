@@ -90,7 +90,7 @@ struct NewMachineSheet: View {
     @Environment(\.modelContext) private var context
     @State private var name = ""
     @State private var kind: CustomEquipment.Kind = .stack
-    @State private var increment: Double = 5
+    @State private var increment: Double = Units.step(5)
 
     private var cleanName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var nameTaken: Bool { EquipmentCatalog.all.contains { $0.name.caseInsensitiveCompare(cleanName) == .orderedSame } }
@@ -105,7 +105,7 @@ struct NewMachineSheet: View {
                         ForEach(CustomEquipment.Kind.allCases, id: \.self) { Text($0.title).tag($0) }
                     }
                     Picker("Weight goes up by", selection: $increment) {
-                        ForEach(Store.stepChoices, id: \.self) { Text("\(Fmt.weight($0)) lb").tag($0) }
+                        ForEach(Units.stepChoices(), id: \.self) { Text(Fmt.lb($0)).tag($0) }
                     }
                 } footer: {
                     if nameTaken {

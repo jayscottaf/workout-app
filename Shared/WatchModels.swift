@@ -15,6 +15,8 @@ struct WatchSnapshot: Codable, Equatable {
     var restOverride: Int = 0
     /// The rest countdown, so the phone and the Watch show the same one.
     var rest: WatchRest? = nil
+    /// Pounds or kilograms, as chosen on the phone (nil from an older iPhone app: pounds).
+    var unit: WeightUnit? = nil
     var sentAt: Date = Date()
 }
 

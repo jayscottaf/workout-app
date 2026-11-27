@@ -49,7 +49,7 @@ struct CapsLabel: View {
 
     var body: some View {
         Text(text.uppercased())
-            .font(.system(size: 12, weight: .bold))
+            .scaledFont(12, weight: .bold)
             .tracking(0.7)
             .foregroundStyle(color)
     }
@@ -94,7 +94,7 @@ struct PrimaryButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 18, weight: .heavy))
+            .scaledFont(18, weight: .heavy)
             .foregroundStyle(foreground)
             .frame(maxWidth: .infinity)
             .frame(height: height)
@@ -112,7 +112,9 @@ struct ChipButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 15, weight: .semibold))
+            .scaledFont(15, weight: .semibold)
+            .lineLimit(1)
+            .fixedSize()
             .foregroundStyle(foreground)
             .padding(.horizontal, 16)
             .frame(minHeight: 44)
@@ -127,17 +129,20 @@ struct CircleIconButton: View {
     let label: String
     var fill: Color = Theme.surface2
     var foreground: Color = Theme.text
+    /// Keep firing while held down, for − and + on weights and reps.
+    var repeats = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 16, weight: .heavy))
+                .scaledFont(16, weight: .heavy)
                 .foregroundStyle(foreground)
                 .frame(width: 44, height: 44)
                 .background(fill, in: Circle())
         }
         .buttonStyle(.plain)
+        .buttonRepeatBehavior(repeats ? .enabled : .disabled)
         .accessibilityLabel(label)
     }
 }
@@ -214,5 +219,33 @@ struct FlowLayout: Layout {
             rows[rows.count - 1] = row
         }
         return rows.filter { !$0.indices.isEmpty }
+    }
+}
+
+/// A fixed design size that grows when the iPhone's text size is set larger
+/// (Settings → Display & Brightness → Text Size). At the standard setting it is exactly `size`.
+struct ScaledFont: ViewModifier {
+    @ScaledMetric private var size: CGFloat
+    private let weight: Font.Weight
+    private let design: Font.Design
+
+    private let base: CGFloat
+
+    init(size: CGFloat, weight: Font.Weight, design: Font.Design) {
+        _size = ScaledMetric(wrappedValue: size, relativeTo: .body)
+        base = size
+        self.weight = weight
+        self.design = design
+    }
+
+    func body(content: Content) -> some View {
+        // Only ever larger: at the iPhone's default text size, or a smaller one, the app keeps its own sizes.
+        content.font(.system(size: max(size, base), weight: weight, design: design))
+    }
+}
+
+extension View {
+    func scaledFont(_ size: CGFloat, weight: Font.Weight = .regular, design: Font.Design = .default) -> some View {
+        modifier(ScaledFont(size: size, weight: weight, design: design))
     }
 }

@@ -19,7 +19,7 @@ Arguments → add `-demoData`.
 | Rotation | Offers the day after the one you did last, however long ago. You can pick a different day. |
 | Routine | Rename, add, remove and reorder days, and choose the exercises each day starts with, or switch to a ready-made routine (Push / Pull / Legs, Upper / Lower, Full body). Open it from Change → Edit routine on Today, or Settings → Days and exercises. Logged workouts and records are kept. |
 | Abs | Add-on offered every few days (default 3, change in Settings). |
-| Fast logging | Sets pre-filled with today's target, one tap to confirm, +/- for weight and reps (or tap the weight to type it, for big jumps like 135 to 225), rest timer starts by itself. |
+| Fast logging | Sets pre-filled with today's target, one tap to confirm, +/- for weight and reps (hold to keep changing, or tap the weight to type it, for big jumps like 135 to 225), rest timer starts by itself. |
 | Plates and warm-ups | Barbell and plate-loaded exercises show what to put on each side (45 lb bar, standard plates), on the phone and the Watch. The phone also suggests lighter warm-up sets before the first set; they are not logged. |
 | Rest on the Lock Screen | The rest countdown shows on the Lock Screen and in the Dynamic Island (a Live Activity), so you can see it without opening the app. |
 | Fix a past workout | Open a workout from the calendar or the summary, tap Edit, and change or remove a set. Personal records are worked out again afterwards. |
@@ -32,6 +32,16 @@ Arguments → add `-demoData`.
 | Progress | Personal records, estimated strength chart, weekly sets per muscle group, calendar, monthly recap. |
 | Apple Health | Reads runs, walks and body weight. Saves each lifting session as a strength workout. |
 | Streak | Counts weeks where you hit your weekly goal (default 3), not days. |
+| Pounds or kilograms | Settings → Units. Weights are always saved in pounds, so switching never changes your history; what is shown and typed, the plates (20 kg bar, kilogram plates) and the weight steps (5 lb ↔ 2.5 kg) follow the choice, on the phone and the Watch. |
+| Export | Settings → Export workouts (CSV) makes a spreadsheet of every logged set, to save to Files, AirDrop or email as a backup. |
+| Import | Settings → Import from Strong or Hevy reads either app's CSV export. Exercise names are matched to the built-in list ("Bench Press (Barbell)" is the barbell bench press); names that don't match become your own exercises. Importing the same file twice adds nothing. |
+| First run | A short setup the first time: pounds or kilograms, which routine, a weekly goal and your gym's name. |
+| Supersets | In a workout, the top menu → Superset with… pairs two exercises; logging a set jumps to the other one, and rest starts after each round. |
+| Machine settings | Notes per machine at each gym (seat 4, pin 6), shown during the workout and edited from the gym list. |
+| How it felt | Press and hold a logged set to mark it easy, hard or failed. All easy at the top of the range jumps two steps; a failed set holds the weight. Optional. |
+| Larger Text | Text follows the iPhone's text size, up to the largest standard size (the bigger accessibility sizes are capped there so words and the timer don't break). |
+| iCloud | Workouts, gyms and exercises sync through your private iCloud when it is on for the app. Routine and settings stay on the phone. |
+| Privacy | Everything stays on your devices: no accounts, ads, analytics or tracking. `NextUp/PrivacyInfo.xcprivacy` and `NextUpWatch/PrivacyInfo.xcprivacy` are Apple's privacy manifests; The privacy policy is published at https://sites.google.com/view/next-up-privacy-policy (text in `docs/privacy.md`) and linked from Settings. |
 
 ## Apple Watch
 
@@ -61,6 +71,8 @@ Each exercise has a rep range, for example 8 to 12.
 - **Two in a row without progress:** hold the weight and match last time. If reps fell below the bottom of the
   range, drop about 10% and rebuild.
 - **Two weeks or more away:** start about 10% lighter.
+- **How it felt (optional):** every set marked easy at the top of the range jumps two steps; any set marked
+  failed holds the weight until every set is clean.
 - **First time on a machine:** a light starting guess; whatever you log becomes the baseline.
 
 A set is a personal record when it is the heaviest weight, the most reps at that weight, or the best estimated
@@ -79,6 +91,7 @@ NextUpRestActivity/ The small extension that draws the rest countdown on the Loc
 Shared/             The data the phone and the Watch send each other, plus the plate and warm-up maths.
 NextUpUITests/      Drives the app in the simulator through the main flow and screenshots each step.
 Tests/              Unit tests for the rules.
+docs/               The privacy policy web page.
 ```
 
 ## Tests

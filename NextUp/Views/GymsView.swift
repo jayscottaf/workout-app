@@ -3,6 +3,8 @@ import SwiftData
 
 /// Each gym with its own equipment. Machines keep separate history per gym; free weights share one.
 struct GymsView: View {
+    /// Redraws every weight when pounds or kilograms is changed in Settings.
+    @AppStorage(Units.key) private var weightUnit = WeightUnit.lb.rawValue
     @Environment(\.modelContext) private var context
     @Query(sort: \Gym.createdAt) private var gyms: [Gym]
     @Query private var workouts: [Workout]
@@ -28,7 +30,7 @@ struct GymsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     Text("Gyms")
-                        .font(Theme.rounded(34))
+                        .scaledFont(34, weight: .heavy, design: .rounded)
                         .accessibilityAddTraits(.isHeader)
                     Spacer()
                     CircleIconButton(systemName: "plus", label: "Add a gym", fill: Theme.surface, foreground: Theme.volt) {
@@ -54,7 +56,7 @@ struct GymsView: View {
                     gymCard(gym)
                     Button { tickingGym = gym } label: {
                         Label("Choose equipment at \(gym.name)", systemImage: "checklist")
-                            .font(.system(size: 16, weight: .bold))
+                            .scaledFont(16, weight: .bold)
                             .foregroundStyle(Theme.onVolt)
                             .frame(maxWidth: .infinity, minHeight: 52)
                             .background(Theme.volt, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -70,13 +72,13 @@ struct GymsView: View {
                         section("Machines · tracked separately here", machines, counts: counts)
                     }
                     Button("Add equipment") { showAddEquipment = true }
-                        .font(.system(size: 15, weight: .bold))
+                        .scaledFont(15, weight: .bold)
                         .foregroundStyle(Theme.volt)
                         .frame(maxWidth: .infinity, minHeight: 48)
                         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.line, lineWidth: 1))
                         .buttonStyle(.plain)
                     Text("Suggestions only use equipment listed here. Set each one's step size to match the real jumps between weights, so \"next weight up\" is a weight you can actually load.")
-                        .font(.system(size: 13))
+                        .scaledFont(13)
                         .foregroundStyle(Theme.muted)
                 } else {
                     Text("Add your first gym to get suggestions that match its equipment.")
@@ -132,15 +134,15 @@ struct GymsView: View {
         let isCurrent = gym.id == currentGym?.id
         return HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(gym.name).font(.system(size: 17, weight: .bold))
-                Text("\(isCurrent ? "You are training here" : "Not your current gym") · \(gym.equipment.count) pieces of equipment")
-                    .font(.system(size: 13))
+                Text(gym.name).scaledFont(17, weight: .bold)
+                Text("\(isCurrent ? "You are training here" : "Not your current gym") · \(gym.items.count) pieces of equipment")
+                    .scaledFont(13)
                     .foregroundStyle(Theme.muted)
             }
             Spacer(minLength: 0)
             if isCurrent {
                 Text("CURRENT")
-                    .font(.system(size: 12, weight: .heavy))
+                    .scaledFont(12, weight: .heavy)
                     .foregroundStyle(Theme.volt)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
@@ -159,7 +161,7 @@ struct GymsView: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 16, weight: .heavy))
+                    .scaledFont(16, weight: .heavy)
                     .foregroundStyle(Theme.muted)
                     .frame(width: 44, height: 44)
             }
@@ -177,20 +179,20 @@ struct GymsView: View {
                     Button { editing = item } label: {
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(item.name).font(.system(size: 16, weight: .semibold))
-                                Text("\(item.type?.loading ?? "Equipment") · \(Fmt.weight(item.increment)) lb steps")
-                                    .font(.system(size: 13))
+                                Text(item.name).scaledFont(16, weight: .semibold)
+                                Text("\(item.type?.loading ?? "Equipment") · \(Fmt.lb(item.increment)) steps")
+                                    .scaledFont(13)
                                     .foregroundStyle(Theme.muted)
                             }
                             Spacer(minLength: 8)
                             let count = counts[item.id] ?? 0
                             if count > 0 {
                                 Text("\(count) session\(count == 1 ? "" : "s")")
-                                    .font(.system(size: 13))
+                                    .scaledFont(13)
                                     .foregroundStyle(Theme.muted)
                             }
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .heavy))
+                                .scaledFont(12, weight: .heavy)
                                 .foregroundStyle(Theme.faint)
                         }
                         .padding(.horizontal, 16)
@@ -208,7 +210,7 @@ struct GymsView: View {
     private func sessionCounts() -> [UUID: Int] {
         var counts: [UUID: Int] = [:]
         for workout in workouts where workout.endedAt != nil {
-            for id in Set(workout.entries.compactMap(\.equipmentID)) {
+            for id in Set(workout.allEntries.compactMap(\.equipmentID)) {
                 counts[id, default: 0] += 1
             }
         }
@@ -275,10 +277,10 @@ struct AddEquipmentSheet: View {
             List {
                 Section {
                     ForEach(EquipmentCatalog.all) { type in
-                        let have = gym.equipment.filter { $0.typeID == type.id }.count
+                        let have = gym.items.filter { $0.typeID == type.id }.count
                         Button {
                             let item = Equipment(typeID: type.id, name: have == 0 ? type.name : "\(type.name) \(have + 1)",
-                                                 increment: type.defaultIncrement)
+                                                 increment: type.step)
                             context.insert(item)
                             item.gym = gym
                             try? context.save()
@@ -323,11 +325,20 @@ struct EquipmentEditSheet: View {
                     TextField("Name", text: $equipment.name)
                 }
                 Section {
-                    Stepper("Goes up in \(Fmt.weight(equipment.increment)) lb steps", value: $equipment.increment, in: 1...50, step: 2.5)
+                    Stepper("Goes up in \(Fmt.lb(equipment.increment)) steps", value: $equipment.increment,
+                            in: Units.step(1)...Units.step(50), step: Units.step(2.5))
                 } footer: {
                     Text(equipment.type?.category == .machine
                          ? "This machine keeps its own history, because the same number on a different machine is not the same effort."
                          : "Free weights share one history across all your gyms. Only the step size is specific to this gym.")
+                }
+                Section {
+                    TextField("Seat 4, back pad 2", text: $equipment.notes, axis: .vertical)
+                        .accessibilityIdentifier("equipmentNotes")
+                } header: {
+                    Text("Your settings")
+                } footer: {
+                    Text("Shown on the workout screen whenever you use this at this gym.")
                 }
                 Section {
                     Button("Remove from this gym", role: .destructive) {
@@ -368,7 +379,7 @@ struct GymEquipmentSheet: View {
                 Section {
                     ForEach(EquipmentCatalog.all) { type in
                         Toggle(isOn: Binding(
-                            get: { gym.equipment.contains { $0.typeID == type.id } },
+                            get: { gym.items.contains { $0.typeID == type.id } },
                             set: { Store.setHas(type, $0, gym: gym, context: context) })) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(type.name)

@@ -3,6 +3,8 @@ import SwiftData
 
 /// Home screen: offers whichever day is next, plus add-ons, weekly goal and cardio.
 struct TodayView: View {
+    /// Redraws every weight when pounds or kilograms is changed in Settings.
+    @AppStorage(Units.key) private var weightUnit = WeightUnit.lb.rawValue
     let onStart: (Workout) -> Void
 
     @Environment(\.modelContext) private var context
@@ -94,7 +96,9 @@ struct TodayView: View {
             VStack(alignment: .leading, spacing: 2) {
                 CapsLabel(Date().longDay)
                 Text("Today")
-                    .font(Theme.rounded(34))
+                    .scaledFont(34, weight: .heavy, design: .rounded)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                     .accessibilityAddTraits(.isHeader)
             }
             Spacer()
@@ -120,9 +124,9 @@ struct TodayView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "mappin.circle.fill").foregroundStyle(Theme.volt)
                     Text(gym?.name ?? "No gym")
-                        .font(.system(size: 14, weight: .semibold))
+                        .scaledFont(14, weight: .semibold)
                         .lineLimit(1)
-                    Image(systemName: "chevron.down").font(.system(size: 10, weight: .heavy)).foregroundStyle(Theme.muted)
+                    Image(systemName: "chevron.down").scaledFont(10, weight: .heavy).foregroundStyle(Theme.muted)
                 }
                 .padding(.horizontal, 14)
                 .frame(height: 44)
@@ -154,7 +158,7 @@ struct TodayView: View {
                         Text("Change")
                         Image(systemName: "chevron.down")
                     }
-                    .font(.system(size: 13, weight: .bold))
+                    .scaledFont(13, weight: .bold)
                     .foregroundStyle(Theme.onVolt)
                     .frame(minWidth: 44, minHeight: 32)
                 }
@@ -162,12 +166,12 @@ struct TodayView: View {
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text(day.title)
-                    .font(Theme.rounded(36))
+                    .scaledFont(36, weight: .heavy, design: .rounded)
                     .tracking(-0.8)
                     .minimumScaleFactor(0.7)
                     .lineLimit(1)
                 Text("\(plan.count) exercises · about \(Planner.estimateMinutes(plan)) min · \(lastDone(day))")
-                    .font(.system(size: 15, weight: .medium))
+                    .scaledFont(15, weight: .medium)
                     .foregroundStyle(Theme.onVoltSoft)
                 muscleTags(plan.map(\.exercise.id))
                 if let pair = Overlap.firstPair(plan.map(\.exercise), kept: Overlap.keptPairs(keptPairs)) {
@@ -190,7 +194,7 @@ struct TodayView: View {
                             .frame(minHeight: 32)
                         }
                     }
-                    .font(.system(size: 13, weight: .semibold))
+                    .scaledFont(13, weight: .semibold)
                     .foregroundStyle(Theme.onVolt)
                     .padding(.top, 6)
                     .accessibilityElement(children: .contain)
@@ -201,12 +205,12 @@ struct TodayView: View {
                         editingToday = true
                     } label: {
                         Label(customPlan == nil ? "Edit today's exercises" : "Changed for today · edit", systemImage: "list.bullet")
-                            .font(.system(size: 13, weight: .bold))
+                            .scaledFont(13, weight: .bold)
                     }
                     .accessibilityIdentifier("editToday")
                     if customPlan != nil {
                         Button("Undo") { customPlan = nil }
-                            .font(.system(size: 13, weight: .bold))
+                            .scaledFont(13, weight: .bold)
                             .underline()
                             .accessibilityLabel("Undo today's changes")
                             .accessibilityIdentifier("undoToday")
@@ -230,7 +234,7 @@ struct TodayView: View {
                     start(day: day, quick: true, history: history, gym: gym, overrides: overrides)
                 } label: {
                     Text("20 min")
-                        .font(.system(size: 15, weight: .bold))
+                        .scaledFont(15, weight: .bold)
                         .foregroundStyle(Theme.onVolt)
                         .padding(.horizontal, 18)
                         .frame(height: 52)
@@ -250,11 +254,11 @@ struct TodayView: View {
         VStack(alignment: .leading, spacing: 14) {
             CapsLabel("Workout in progress", color: Theme.onVolt)
             Text(active.title)
-                .font(Theme.rounded(36))
+                .scaledFont(36, weight: .heavy, design: .rounded)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
             Text("\(active.completedSets.count) sets logged so far")
-                .font(.system(size: 15, weight: .medium))
+                .scaledFont(15, weight: .medium)
                 .foregroundStyle(Theme.onVoltSoft)
             Button("Pick up where you left off") { onStart(active) }
                 .buttonStyle(PrimaryButtonStyle(fill: Theme.onVolt, foreground: Theme.text, height: 52))
@@ -281,11 +285,11 @@ struct TodayView: View {
                                 Text(muscle.title)
                                 if split {
                                     Image(systemName: "chevron.down")
-                                        .font(.system(size: 9, weight: .heavy))
+                                        .scaledFont(9, weight: .heavy)
                                         .rotationEffect(.degrees(open ? 180 : 0))
                                 }
                             }
-                            .font(.system(size: 13, weight: .semibold))
+                            .scaledFont(13, weight: .semibold)
                             .foregroundStyle(open ? Theme.volt : Theme.onVolt)
                             .padding(.horizontal, 10)
                             .frame(minHeight: 28)
@@ -305,7 +309,7 @@ struct TodayView: View {
                         ForEach(MuscleParts.breakdown(ids, muscle: muscle), id: \.part) { row in
                             (Text("\(row.part): ").bold()
                              + Text(row.exercises.isEmpty ? "nothing today" : row.exercises.joined(separator: ", ")))
-                                .font(.system(size: 13))
+                                .scaledFont(13)
                                 .foregroundStyle(row.exercises.isEmpty ? Theme.onVoltSoft : Theme.onVolt)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -378,9 +382,9 @@ struct TodayView: View {
         VStack(alignment: .leading, spacing: 10) {
             CapsLabel("This week")
             HStack(alignment: .firstTextBaseline, spacing: 5) {
-                Text("\(status.thisWeek)").font(Theme.rounded(28))
+                Text("\(status.thisWeek)").scaledFont(28, weight: .heavy, design: .rounded)
                 Text("of \(status.goal) workouts")
-                    .font(.system(size: 15, weight: .semibold))
+                    .scaledFont(15, weight: .semibold)
                     .foregroundStyle(Theme.muted)
             }
             SegmentBar(filled: status.thisWeek, total: status.goal)
@@ -393,13 +397,13 @@ struct TodayView: View {
         VStack(alignment: .leading, spacing: 10) {
             CapsLabel("Streak")
             HStack(alignment: .firstTextBaseline, spacing: 5) {
-                Text("\(status.streak)").font(Theme.rounded(28))
+                Text("\(status.streak)").scaledFont(28, weight: .heavy, design: .rounded)
                 Text(status.streak == 1 ? "week" : "weeks")
-                    .font(.system(size: 15, weight: .semibold))
+                    .scaledFont(15, weight: .semibold)
                     .foregroundStyle(Theme.muted)
             }
             Text(streakHint(status))
-                .font(.system(size: 13))
+                .scaledFont(13)
                 .foregroundStyle(Theme.muted)
                 .lineLimit(2, reservesSpace: false)
                 .fixedSize(horizontal: false, vertical: true)
@@ -464,9 +468,9 @@ struct TodayView: View {
     private func addOnRow(title: String, detail: String, isOn: Bool, label: String, action: @escaping () -> Void) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 16, weight: .bold))
+                Text(title).scaledFont(16, weight: .bold)
                 Text(detail)
-                    .font(.system(size: 13))
+                    .scaledFont(13)
                     .foregroundStyle(Theme.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -500,9 +504,9 @@ struct TodayView: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Your \(previousMonth.formatted(.dateTime.month(.wide))) recap is ready")
-                        .font(.system(size: 16, weight: .bold))
+                        .scaledFont(16, weight: .bold)
                     Text("See what you got done last month")
-                        .font(.system(size: 13))
+                        .scaledFont(13)
                         .foregroundStyle(Theme.muted)
                 }
                 Spacer()
@@ -519,23 +523,23 @@ struct TodayView: View {
         if health.connected {
             HStack(spacing: 12) {
                 Image(systemName: "figure.run")
-                    .font(.system(size: 17, weight: .bold))
+                    .scaledFont(17, weight: .bold)
                     .foregroundStyle(Theme.blue)
                     .frame(width: 40, height: 40)
                     .background(Theme.blueDim, in: Circle())
                     .accessibilityHidden(true)
                 if let latest = health.cardio.first {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(latest.title).font(.system(size: 15, weight: .bold))
+                        Text(latest.title).scaledFont(15, weight: .bold)
                         Text("\(latest.date.shortDay) · \(latest.durationText) · from Apple Health")
-                            .font(.system(size: 13))
+                            .scaledFont(13)
                             .foregroundStyle(Theme.muted)
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("No runs or walks yet").font(.system(size: 15, weight: .bold))
+                        Text("No runs or walks yet").scaledFont(15, weight: .bold)
                         Text("They appear here from Apple Health")
-                            .font(.system(size: 13))
+                            .scaledFont(13)
                             .foregroundStyle(Theme.muted)
                     }
                 }
@@ -549,14 +553,14 @@ struct TodayView: View {
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "heart.fill")
-                        .font(.system(size: 16, weight: .bold))
+                        .scaledFont(16, weight: .bold)
                         .foregroundStyle(Theme.blue)
                         .frame(width: 40, height: 40)
                         .background(Theme.blueDim, in: Circle())
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Connect Apple Health").font(.system(size: 15, weight: .bold))
+                        Text("Connect Apple Health").scaledFont(15, weight: .bold)
                         Text("Shows your runs and walks, saves your lifting")
-                            .font(.system(size: 13))
+                            .scaledFont(13)
                             .foregroundStyle(Theme.muted)
                     }
                     Spacer(minLength: 0)

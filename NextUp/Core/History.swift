@@ -7,6 +7,21 @@ struct SetRecord: Equatable {
     var weight: Double
     var reps: Int
     var isPR: Bool = false
+    /// How the set felt, if you said (optional, press and hold a logged set).
+    var effort: Effort? = nil
+}
+
+/// How a logged set felt. Optional: logging stays one tap.
+enum Effort: String, CaseIterable, Codable {
+    case easy, hard, failed
+
+    var title: String {
+        switch self {
+        case .easy: return "Easy"
+        case .hard: return "Hard"
+        case .failed: return "Failed a rep"
+        }
+    }
 }
 
 struct EntryRecord {

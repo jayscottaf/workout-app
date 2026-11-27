@@ -19,6 +19,8 @@ private struct LiftOption: Identifiable, Hashable {
 
 /// Records, estimated strength chart, weekly volume per muscle group, calendar and monthly recap.
 struct ProgressScreen: View {
+    /// Redraws every weight when pounds or kilograms is changed in Settings.
+    @AppStorage(Units.key) private var weightUnit = WeightUnit.lb.rawValue
     @EnvironmentObject private var health: HealthService
     @Query(sort: \Workout.startedAt, order: .reverse) private var workouts: [Workout]
     @Query(sort: \Gym.createdAt) private var gyms: [Gym]
@@ -36,15 +38,15 @@ struct ProgressScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Progress")
-                    .font(Theme.rounded(34))
+                    .scaledFont(34, weight: .heavy, design: .rounded)
                     .accessibilityAddTraits(.isHeader)
                     .padding(.bottom, 2)
 
                 if finished.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Nothing to chart yet").font(.system(size: 17, weight: .bold))
+                        Text("Nothing to chart yet").scaledFont(17, weight: .bold)
                         Text("Finish your first workout and your records, strength trend and calendar will show up here.")
-                            .font(.system(size: 14))
+                            .scaledFont(14)
                             .foregroundStyle(Theme.muted)
                     }
                     .card()
@@ -60,11 +62,11 @@ struct ProgressScreen: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             CapsLabel("Body weight")
-                            Text("\(String(format: "%.1f", weight)) lb").font(Theme.rounded(24))
+                            Text(Fmt.lb(weight)).scaledFont(24, weight: .heavy, design: .rounded)
                         }
                         Spacer()
                         Text("from Apple Health\(health.bodyWeightDate.map { " · \($0.shortDay)" } ?? "")")
-                            .font(.system(size: 13))
+                            .scaledFont(13)
                             .foregroundStyle(Theme.muted)
                     }
                     .card()
@@ -79,7 +81,7 @@ struct ProgressScreen: View {
         .confirmationDialog("Which workout?", isPresented: Binding(
             get: { !dayChoices.isEmpty }, set: { if !$0 { dayChoices = [] } }), titleVisibility: .visible) {
             ForEach(dayChoices) { workout in
-                let sets = workout.entries.reduce(0) { $0 + $1.sets.count }
+                let sets = workout.allEntries.reduce(0) { $0 + $1.allSets.count }
                 Button("\(workout.title) · \(workout.startedAt.formatted(date: .omitted, time: .shortened)) · \(sets) \(sets == 1 ? "set" : "sets")") {
                     dayChoices = []
                     opened = workout
@@ -99,7 +101,7 @@ struct ProgressScreen: View {
         var labels: [String: String] = [:]
         var compound: [String: Bool] = [:]
         for workout in finished {
-            for entry in workout.entries where !entry.completedSets.isEmpty && !entry.isBodyweight {
+            for entry in workout.allEntries where !entry.completedSets.isEmpty && !entry.isBodyweight {
                 counts[entry.historyKey, default: 0] += 1
                 compound[entry.historyKey] = entry.exercise?.compound ?? false
                 if labels[entry.historyKey] == nil {
@@ -136,7 +138,7 @@ struct ProgressScreen: View {
                             Text(chosen.label).lineLimit(1)
                             Image(systemName: "chevron.down")
                         }
-                        .font(.system(size: 13, weight: .bold))
+                        .scaledFont(13, weight: .bold)
                         .foregroundStyle(Theme.volt)
                         .frame(minHeight: 44, alignment: .top)
                     }
@@ -146,19 +148,19 @@ struct ProgressScreen: View {
 
                 if let latest = points.last, let first = points.first {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("\(Int(latest.value.rounded())) lb").font(Theme.rounded(28))
+                        Text("\(Int(Units.shown(latest.value).rounded())) \(Units.symbol)").scaledFont(28, weight: .heavy, design: .rounded)
                         Text(changeText(first: first, latest: latest, count: points.count))
-                            .font(.system(size: 14, weight: .bold))
+                            .scaledFont(14, weight: .bold)
                             .foregroundStyle(latest.value >= first.value ? Theme.volt : Theme.muted)
                     }
                 }
 
                 Chart(points) { point in
-                    LineMark(x: .value("Session", point.index), y: .value("Estimated max", point.value))
+                    LineMark(x: .value("Session", point.index), y: .value("Estimated max", Units.shown(point.value)))
                         .foregroundStyle(Theme.volt)
                         .interpolationMethod(.monotone)
                         .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-                    PointMark(x: .value("Session", point.index), y: .value("Estimated max", point.value))
+                    PointMark(x: .value("Session", point.index), y: .value("Estimated max", Units.shown(point.value)))
                         .foregroundStyle(Theme.volt)
                         .symbolSize(28)
                 }
@@ -200,7 +202,7 @@ struct ProgressScreen: View {
                 .accessibilityIdentifier("strengthChart")
 
                 Text("The most you could likely lift once, worked out from your sets. Tap a point to open that workout.")
-                    .font(.system(size: 13))
+                    .scaledFont(13)
                     .foregroundStyle(Theme.muted)
             }
             .card()
@@ -209,12 +211,12 @@ struct ProgressScreen: View {
 
     private func changeText(first: StrengthPoint, latest: StrengthPoint, count: Int) -> String {
         guard count > 1 else { return "first session logged" }
-        let change = Int((latest.value - first.value).rounded())
+        let change = Int(Units.shown(latest.value - first.value).rounded())
         let since = Calendar.current.isDate(first.date, inSameDayAs: latest.date)
             ? "your first session"
             : first.date.formatted(.dateTime.month(.abbreviated).day())
-        if change > 0 { return "up \(change) lb since \(since)" }
-        if change < 0 { return "down \(-change) lb since \(since)" }
+        if change > 0 { return "up \(change) \(Units.symbol) since \(since)" }
+        if change < 0 { return "down \(-change) \(Units.symbol) since \(since)" }
         return "level since \(since)"
     }
 
@@ -241,7 +243,7 @@ struct ProgressScreen: View {
         return VStack(alignment: .leading, spacing: 10) {
             CapsLabel("Sets this week, by muscle group")
             Text("Helping muscles count half: a bench press set adds half a set to triceps and shoulders.")
-                .font(.system(size: 12))
+                .scaledFont(12)
                 .foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(spacing: 8) {
@@ -249,7 +251,7 @@ struct ProgressScreen: View {
                     let count = sets[group] ?? 0
                     HStack(spacing: 8) {
                         Text(group.title)
-                            .font(.system(size: 13))
+                            .scaledFont(13)
                             .frame(width: 72, alignment: .leading)
                         GeometryReader { proxy in
                             ZStack(alignment: .leading) {
@@ -260,7 +262,7 @@ struct ProgressScreen: View {
                         }
                         .frame(height: 8)
                         Text(Self.setsNumber(count))
-                            .font(.system(size: 13))
+                            .scaledFont(13)
                             .monospacedDigit()
                             .foregroundStyle(Theme.muted)
                             .frame(width: 22, alignment: .trailing)
@@ -287,7 +289,7 @@ struct ProgressScreen: View {
                 FlowLayout(spacing: 6) {
                     ForEach(missed, id: \.title) { item in
                         Text(item.title)
-                            .font(.system(size: 13, weight: .semibold))
+                            .scaledFont(13, weight: .semibold)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
                             .overlay(Capsule().strokeBorder(Theme.line, lineWidth: 1))
@@ -301,11 +303,11 @@ struct ProgressScreen: View {
                         ForEach(Array(ideas), id: \.title) { item in
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Text(item.title)
-                                    .font(.system(size: 14))
+                                    .scaledFont(14)
                                     .foregroundStyle(Theme.muted)
                                     .frame(width: 112, alignment: .leading)
                                 Text("Try \(item.suggestion!.name)")
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .scaledFont(14, weight: .semibold)
                                     .fixedSize(horizontal: false, vertical: true)
                                 Spacer(minLength: 0)
                             }
@@ -315,7 +317,7 @@ struct ProgressScreen: View {
                 }
                 Text(gym.map { "Ideas use what \($0.name) has. Add one from the + button during a workout." }
                      ?? "Add one from the + button during a workout.")
-                    .font(.system(size: 13))
+                    .scaledFont(13)
                     .foregroundStyle(Theme.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -340,21 +342,21 @@ struct ProgressScreen: View {
             CapsLabel("Recent personal records")
             if records.isEmpty {
                 Text("No records yet. They start counting from your second session on each exercise.")
-                    .font(.system(size: 14))
+                    .scaledFont(14)
                     .foregroundStyle(Theme.muted)
             }
             ForEach(Array(records.prefix(5).enumerated()), id: \.element.set.id) { index, item in
                 if index > 0 { Rectangle().fill(Theme.line).frame(height: 1) }
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(item.set.entry?.name ?? "Exercise").font(.system(size: 15, weight: .bold))
+                        Text(item.set.entry?.name ?? "Exercise").scaledFont(15, weight: .bold)
                         Text(recordDetail(item.set, item.workout))
-                            .font(.system(size: 13))
+                            .scaledFont(13)
                             .foregroundStyle(Theme.muted)
                     }
                     Spacer(minLength: 8)
-                    Text(item.set.weight > 0 ? "\(Fmt.weight(item.set.weight)) lb × \(item.set.reps)" : "\(item.set.reps) reps")
-                        .font(.system(size: 15, weight: .heavy))
+                    Text(item.set.weight > 0 ? "\(Fmt.lb(item.set.weight)) × \(item.set.reps)" : "\(item.set.reps) reps")
+                        .scaledFont(15, weight: .heavy)
                         .monospacedDigit()
                         .foregroundStyle(Theme.volt)
                 }
@@ -389,7 +391,7 @@ struct ProgressScreen: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
                 ForEach(Array(symbols.enumerated()), id: \.offset) { _, symbol in
                     Text(symbol)
-                        .font(.system(size: 11, weight: .semibold))
+                        .scaledFont(11, weight: .semibold)
                         .foregroundStyle(Theme.muted)
                         .accessibilityHidden(true)
                 }
@@ -407,7 +409,7 @@ struct ProgressScreen: View {
                 Spacer()
                 Text("Tap a lifting day to open it")
             }
-            .font(.system(size: 12))
+            .scaledFont(12)
             .foregroundStyle(Theme.muted)
         }
         .card()
@@ -431,7 +433,7 @@ struct ProgressScreen: View {
                 if workouts.count > 1 { dayChoices = workouts.sorted { $0.startedAt < $1.startedAt } } else { opened = workout }
             } label: {
                 Text("\(number)")
-                    .font(.system(size: 13, weight: .heavy))
+                    .scaledFont(13, weight: .heavy)
                     .monospacedDigit()
                     .foregroundStyle(Theme.onVolt)
                     .frame(maxWidth: .infinity, minHeight: 34)
@@ -439,7 +441,7 @@ struct ProgressScreen: View {
                     .overlay(alignment: .topTrailing) {
                         if workouts.count > 1 {
                             Text("\(workouts.count)")
-                                .font(.system(size: 9, weight: .heavy))
+                                .scaledFont(9, weight: .heavy)
                                 .foregroundStyle(Theme.volt)
                                 .frame(width: 15, height: 15)
                                 .background(Theme.bg, in: Circle())
@@ -453,7 +455,7 @@ struct ProgressScreen: View {
                 : "\(day.shortDay): \(workout.title). Open workout")
         } else {
             Text("\(number)")
-                .font(.system(size: 13, weight: hasCardio ? .heavy : .semibold))
+                .scaledFont(13, weight: hasCardio ? .heavy : .semibold)
                 .monospacedDigit()
                 .foregroundStyle(hasCardio ? Theme.blue : (isFuture ? Theme.faint : Theme.muted))
                 .frame(maxWidth: .infinity, minHeight: 34)
@@ -507,7 +509,7 @@ struct RecapCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(recap.lines, id: \.self) { line in
                     Text(line)
-                        .font(.system(size: 15))
+                        .scaledFont(15)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -517,8 +519,8 @@ struct RecapCard: View {
 
     private func figure(_ value: String, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(value).font(Theme.rounded(26)).monospacedDigit()
-            Text(label).font(.system(size: 12)).foregroundStyle(Theme.muted)
+            Text(value).scaledFont(26, weight: .heavy, design: .rounded).monospacedDigit()
+            Text(label).scaledFont(12).foregroundStyle(Theme.muted)
         }
         .accessibilityElement(children: .combine)
     }
@@ -538,7 +540,7 @@ struct RecapSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Monthly recap")
-                .font(Theme.rounded(28))
+                .scaledFont(28, weight: .heavy, design: .rounded)
                 .accessibilityAddTraits(.isHeader)
             RecapCard(month: month)
             Spacer()

@@ -391,6 +391,38 @@ final class WalkthroughTests: XCTestCase {
         shot("43-kept-both")
     }
 
+    /// Screen polish: the workout screen, rest timer and Today, at the normal text size and
+    /// at a large accessibility text size. CI also runs this on the smallest iPhone it has.
+    @MainActor
+    func testScreenPolish() {
+        for (label, size) in [("normal", ""), ("large-text", "UICTContentSizeCategoryAccessibilityL")] {
+            let app = XCUIApplication()
+            app.launchArguments = ["-demoData"] + (size.isEmpty ? [] : ["-UIPreferredContentSizeCategoryName", size])
+            app.launch()
+            XCTAssertTrue(app.buttons["startWorkout"].waitForExistence(timeout: 30))
+            shot("50-\(label)-today")
+            app.swipeUp()
+            shot("51-\(label)-today-scrolled")
+            app.swipeDown()
+
+            app.buttons["startWorkout"].tap()
+            XCTAssertTrue(app.buttons["logSet"].waitForExistence(timeout: 10))
+            shot("52-\(label)-logging")
+            app.buttons["logSet"].tap()
+            XCTAssertTrue(app.staticTexts["REST"].waitForExistence(timeout: 5))
+            shot("53-\(label)-rest")
+            app.buttons["Skip rest"].tap()
+            // A few sets in: the current set should still be near the top.
+            for _ in 0..<2 where app.buttons["logSet"].waitForExistence(timeout: 3) {
+                app.buttons["logSet"].tap()
+                if app.buttons["Skip rest"].waitForExistence(timeout: 3) { app.buttons["Skip rest"].tap() }
+            }
+            sleep(1) // let the rest timer finish sliding away
+            shot("54-\(label)-later-set")
+            app.terminate()
+        }
+    }
+
     private func shot(_ name: String) {
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name

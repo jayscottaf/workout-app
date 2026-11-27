@@ -51,6 +51,29 @@ jobs:
             | tee build.log | grep -E "error:|warning: unre|Test Case|Test Suite|BUILD|\*\* TEST" || true
           grep -q "\*\* TEST SUCCEEDED \*\*" build.log
 
+      - name: Screen check on the smallest iPhone
+        if: success()
+        run: |
+          SMALL=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          devices = json.load(sys.stdin)['devices']
+          runtimes = sorted((k for k in devices if 'iOS' in k), reverse=True)
+          for k in runtimes:
+              for name in ('iPhone SE', 'iPhone 16e', 'iPhone 13 mini', 'iPhone 12 mini'):
+                  for d in devices[k]:
+                      if d['name'].startswith(name):
+                          print(d['udid']); sys.exit()
+          ")
+          if [ -z "$SMALL" ]; then echo "No small iPhone simulator available"; exit 0; fi
+          xcrun simctl list devices available | grep "$SMALL"
+          xcodebuild test \
+            -project NextUp.xcodeproj \
+            -scheme NextUp \
+            -destination "platform=iOS Simulator,id=$SMALL" \
+            -only-testing:NextUpUITests/WalkthroughTests/testScreenPolish \
+            -resultBundlePath build/Small.xcresult \
+            | tee small.log | grep -E "error:|Test Case|\*\* TEST" || true
+
       - name: Show errors if it failed
         if: failure()
         run: grep -E "error:|failed|Fatal" build.log | head -80 || tail -80 build.log
@@ -60,7 +83,34 @@ jobs:
         run: |
           mkdir -p screenshots
           xcrun xcresulttool export attachments --path build/Walkthrough.xcresult --output-path screenshots || true
+          if [ -d build/Small.xcresult ]; then
+            mkdir -p screenshots/small-iphone
+            xcrun xcresulttool export attachments --path build/Small.xcresult --output-path screenshots/small-iphone || true
+          fi
           ls -la screenshots || true
+
+      - name: Print small copies of the screen-check shots
+        if: always()
+        # Small JPEGs as text in the log, for reviewers who can read logs but not download artifacts.
+        run: |
+          python3 - <<'PY'
+          import base64, json, os, subprocess
+          for folder, tag in (("screenshots", "main"), ("screenshots/small-iphone", "small")):
+              manifest = os.path.join(folder, "manifest.json")
+              if not os.path.exists(manifest):
+                  continue
+              for test in json.load(open(manifest)):
+                  for a in test.get("attachments", []):
+                      name = a.get("suggestedHumanReadableName", "")
+                      if not name.startswith(("5", "01-", "02-", "04-")):
+                          continue
+                      src = os.path.join(folder, a["exportedFileName"])
+                      out = "/tmp/shot.jpg"
+                      subprocess.run(["sips", "-s", "format", "jpeg", "-s", "formatOptions", "55",
+                                      "-Z", "760", src, "--out", out], capture_output=True)
+                      data = base64.b64encode(open(out, "rb").read()).decode()
+                      print(f"SHOT {tag}/{name} {data}")
+          PY
 
       - name: Upload screenshots and log
         if: always()
@@ -70,3 +120,4 @@ jobs:
           path: |
             screenshots
             build.log
+            small.log

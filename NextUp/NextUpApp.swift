@@ -3,6 +3,8 @@ import SwiftData
 
 @main
 struct NextUpApp: App {
+    /// Set when the saved workouts could not be opened at launch.
+    static var databaseProblem: String?
     private let container: ModelContainer
     @StateObject private var health: HealthService
     @StateObject private var rest = RestTimer.shared
@@ -13,11 +15,26 @@ struct NextUpApp: App {
         let demo = ProcessInfo.processInfo.arguments.contains("-demoData")
         let schema = Schema([Gym.self, Equipment.self, Workout.self, ExerciseEntry.self, SetEntry.self, ExercisePrefs.self,
                              CustomEquipment.self, CustomExercise.self])
-        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: demo)
+        // iCloud sync when the app is signed with its iCloud container (your builds); otherwise on this iPhone only.
+        // Same file either way, so turning sync on or off never loses anything.
+        let synced = ModelConfiguration(schema: schema, isStoredInMemoryOnly: demo, cloudKitDatabase: demo ? .none : .automatic)
+        let local = ModelConfiguration(schema: schema, isStoredInMemoryOnly: demo, cloudKitDatabase: .none)
         do {
-            container = try ModelContainer(for: schema, configurations: [configuration])
+            do {
+                container = try ModelContainer(for: schema, configurations: [synced])
+            } catch {
+                container = try ModelContainer(for: schema, configurations: [local])
+            }
         } catch {
-            fatalError("Could not open the workout database: \(error)")
+            // Never crash on launch. The saved file is left exactly as it is (nothing is deleted),
+            // the app opens with a temporary empty database, and a message explains what happened.
+            NextUpApp.databaseProblem = "\(error)"
+            let temporary = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+            do {
+                container = try ModelContainer(for: schema, configurations: [temporary])
+            } catch {
+                fatalError("Could not open even a temporary workout database: \(error)")
+            }
         }
         Store.seedIfNeeded(ModelContext(container), demo: demo)
         // The Lock Screen card stays while a workout is in progress (even if the app was closed), else it is cleared.
@@ -30,7 +47,10 @@ struct NextUpApp: App {
         let health = HealthService()
         _health = StateObject(wrappedValue: health)
         // Apple Watch: also runs when the Watch wakes the app in the background.
-        WatchLink.shared.activate(container: container, health: health)
+        // Not while on the temporary blank database: the Watch would take it as the truth and drop its workout.
+        if NextUpApp.databaseProblem == nil {
+            WatchLink.shared.activate(container: container, health: health)
+        }
         // A countdown started, lengthened or skipped on the phone shows on the Watch too.
         RestTimer.shared.onChange = { WatchLink.shared.push() }
     }
@@ -42,6 +62,9 @@ struct NextUpApp: App {
                 .environmentObject(rest)
                 .preferredColorScheme(.dark)
                 .tint(Theme.volt)
+                // Text follows the iPhone's text size up to the largest standard size. The accessibility
+                // sizes beyond it broke words in half and pushed the set you are doing off the screen.
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         }
         .modelContainer(container)
     }
@@ -53,6 +76,14 @@ struct RootView: View {
     @Query(sort: \Workout.startedAt, order: .reverse) private var workouts: [Workout]
     @State private var session: Workout?
     @State private var didResume = false
+    @State private var showDatabaseProblem = NextUpApp.databaseProblem != nil
+    /// First launch with nothing logged: a short setup (units, routine, goal, gym name).
+    @AppStorage(WelcomeView.seenKey) private var sawWelcome = false
+    private var showWelcome: Binding<Bool> {
+        Binding(get: { !sawWelcome && workouts.isEmpty && !ProcessInfo.processInfo.arguments.contains("-demoData")
+                       && NextUpApp.databaseProblem == nil },
+                set: { if !$0 { sawWelcome = true } })
+    }
 
     var body: some View {
         TabView {
@@ -76,6 +107,12 @@ struct RootView: View {
             // A finished workout reopened from the calendar: bring up its workout screen.
             if session == nil, let id { session = workouts.first { $0.id == id } }
         }
+        .sheet(isPresented: showWelcome) { WelcomeView() }
+        .alert("Your saved workouts could not be opened", isPresented: $showDatabaseProblem) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Nothing was deleted. The app is running on a temporary blank copy, so anything you log now will not be kept. Close the app fully and open it again. If this keeps happening, update the app, and contact support before deleting it.")
+        }
         .onReceive(WatchLink.shared.$closeWorkoutID) { id in
             // The Watch discarded the workout on screen: close it before it is deleted.
             if let id, session?.id == id { session = nil }
@@ -93,9 +130,9 @@ struct RootView: View {
     /// Changes whenever something the Watch shows has changed.
     private var watchSignature: String {
         guard let latest = workouts.first else { return "none" }
-        let sets = latest.entries.flatMap(\.sets)
+        let sets = latest.allEntries.flatMap(\.allSets)
         let weights = sets.reduce(0) { $0 + $1.weight + Double($1.reps) }
-        return "\(workouts.count)-\(latest.id)-\(latest.endedAt?.timeIntervalSince1970 ?? 0)-\(latest.entries.count)"
+        return "\(workouts.count)-\(latest.id)-\(latest.endedAt?.timeIntervalSince1970 ?? 0)-\(latest.allEntries.count)"
             + "-\(sets.count)-\(latest.completedSets.count)-\(weights)-\(RestSetting.current)"
     }
 }

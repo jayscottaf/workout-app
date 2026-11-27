@@ -222,21 +222,25 @@ struct FlowLayout: Layout {
     }
 }
 
-/// A fixed design size that still grows and shrinks with the iPhone's text size setting
+/// A fixed design size that grows when the iPhone's text size is set larger
 /// (Settings → Display & Brightness → Text Size). At the standard setting it is exactly `size`.
 struct ScaledFont: ViewModifier {
     @ScaledMetric private var size: CGFloat
     private let weight: Font.Weight
     private let design: Font.Design
 
+    private let base: CGFloat
+
     init(size: CGFloat, weight: Font.Weight, design: Font.Design) {
         _size = ScaledMetric(wrappedValue: size, relativeTo: .body)
+        base = size
         self.weight = weight
         self.design = design
     }
 
     func body(content: Content) -> some View {
-        content.font(.system(size: size, weight: weight, design: design))
+        // Only ever larger: at the iPhone's default text size, or a smaller one, the app keeps its own sizes.
+        content.font(.system(size: max(size, base), weight: weight, design: design))
     }
 }
 

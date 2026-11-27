@@ -33,6 +33,7 @@ struct LoggingView: View {
     @AppStorage("keptPairs") private var keptPairs = ""
     /// Hides the one-line tip once you have marked how a set felt.
     @AppStorage("usedEffort") private var usedEffort = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @EnvironmentObject private var rest: RestTimer
     @EnvironmentObject private var health: HealthService
     @Query(sort: \Workout.startedAt, order: .reverse) private var workouts: [Workout]
@@ -269,8 +270,9 @@ struct LoggingView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(entry.name)
                         .scaledFont(30, weight: .heavy, design: .rounded)
-                        // Two lines at most: shrink rather than split a word like "Dumbbell" in half.
-                        .lineLimit(2)
+                        // With larger text, two lines at most: shrink rather than split "Dumbbell" in half.
+                        // At the normal size it wraps as it always did.
+                        .lineLimit(dynamicTypeSize > .large ? 2 : nil)
                         .minimumScaleFactor(0.5)
                         .tracking(-0.5)
                         .fixedSize(horizontal: false, vertical: true)

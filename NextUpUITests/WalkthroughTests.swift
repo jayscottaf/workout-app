@@ -324,7 +324,10 @@ final class WalkthroughTests: XCTestCase {
         XCTAssertTrue(app.buttons["logSet"].waitForExistence(timeout: 10))
         let form = app.buttons["formToggle"]
         for _ in 0..<4 where !form.isHittable { app.swipeUp() }
+        sleep(1) // let the scroll settle so the tap lands on the toggle
         form.tap()
+        // A tap during scroll momentum can be swallowed; one more try before failing.
+        if !app.buttons["watchYouTube"].waitForExistence(timeout: 3) { form.tap() }
         XCTAssertTrue(app.buttons["watchYouTube"].waitForExistence(timeout: 5))
         shot("31-form-tips")
 

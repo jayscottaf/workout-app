@@ -432,4 +432,18 @@ enum Fmt {
     }
 
     static func lb(_ w: Double) -> String { "\(weight(w)) lb" }
+
+    /// A weight the lifter typed, in pounds: "225", "122.5", "122,5" or "225 lb".
+    /// Rounded to one decimal place, the precision the app shows. Nil for anything that isn't
+    /// a weight from 0 (body weight) to 2,000 lb, so a stray typo leaves the set unchanged.
+    static func parseWeight(_ text: String) -> Double? {
+        var t = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        for suffix in ["lbs", "lb"] where t.hasSuffix(suffix) {
+            t = String(t.dropLast(suffix.count)).trimmingCharacters(in: .whitespaces)
+            break
+        }
+        t = t.replacingOccurrences(of: ",", with: ".")
+        guard !t.isEmpty, let value = Double(t), value.isFinite, value >= 0, value <= 2000 else { return nil }
+        return (value * 10).rounded() / 10
+    }
 }

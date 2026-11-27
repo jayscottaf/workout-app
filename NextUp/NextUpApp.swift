@@ -15,14 +15,21 @@ struct NextUpApp: App {
         let demo = ProcessInfo.processInfo.arguments.contains("-demoData")
         let schema = Schema([Gym.self, Equipment.self, Workout.self, ExerciseEntry.self, SetEntry.self, ExercisePrefs.self,
                              CustomEquipment.self, CustomExercise.self])
-        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: demo)
+        // iCloud sync when the app is signed with its iCloud container (your builds); otherwise on this iPhone only.
+        // Same file either way, so turning sync on or off never loses anything.
+        let synced = ModelConfiguration(schema: schema, isStoredInMemoryOnly: demo, cloudKitDatabase: demo ? .none : .automatic)
+        let local = ModelConfiguration(schema: schema, isStoredInMemoryOnly: demo, cloudKitDatabase: .none)
         do {
-            container = try ModelContainer(for: schema, configurations: [configuration])
+            do {
+                container = try ModelContainer(for: schema, configurations: [synced])
+            } catch {
+                container = try ModelContainer(for: schema, configurations: [local])
+            }
         } catch {
             // Never crash on launch. The saved file is left exactly as it is (nothing is deleted),
             // the app opens with a temporary empty database, and a message explains what happened.
             NextUpApp.databaseProblem = "\(error)"
-            let temporary = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            let temporary = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
             do {
                 container = try ModelContainer(for: schema, configurations: [temporary])
             } catch {
@@ -55,6 +62,8 @@ struct NextUpApp: App {
                 .environmentObject(rest)
                 .preferredColorScheme(.dark)
                 .tint(Theme.volt)
+                // Text follows the iPhone's text size, up to a size the workout screen still fits.
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
         }
         .modelContainer(container)
     }
@@ -67,6 +76,13 @@ struct RootView: View {
     @State private var session: Workout?
     @State private var didResume = false
     @State private var showDatabaseProblem = NextUpApp.databaseProblem != nil
+    /// First launch with nothing logged: a short setup (units, routine, goal, gym name).
+    @AppStorage(WelcomeView.seenKey) private var sawWelcome = false
+    private var showWelcome: Binding<Bool> {
+        Binding(get: { !sawWelcome && workouts.isEmpty && !ProcessInfo.processInfo.arguments.contains("-demoData")
+                       && NextUpApp.databaseProblem == nil },
+                set: { if !$0 { sawWelcome = true } })
+    }
 
     var body: some View {
         TabView {
@@ -90,6 +106,7 @@ struct RootView: View {
             // A finished workout reopened from the calendar: bring up its workout screen.
             if session == nil, let id { session = workouts.first { $0.id == id } }
         }
+        .sheet(isPresented: showWelcome) { WelcomeView() }
         .alert("Your saved workouts could not be opened", isPresented: $showDatabaseProblem) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -112,9 +129,9 @@ struct RootView: View {
     /// Changes whenever something the Watch shows has changed.
     private var watchSignature: String {
         guard let latest = workouts.first else { return "none" }
-        let sets = latest.entries.flatMap(\.sets)
+        let sets = latest.allEntries.flatMap(\.allSets)
         let weights = sets.reduce(0) { $0 + $1.weight + Double($1.reps) }
-        return "\(workouts.count)-\(latest.id)-\(latest.endedAt?.timeIntervalSince1970 ?? 0)-\(latest.entries.count)"
+        return "\(workouts.count)-\(latest.id)-\(latest.endedAt?.timeIntervalSince1970 ?? 0)-\(latest.allEntries.count)"
             + "-\(sets.count)-\(latest.completedSets.count)-\(weights)-\(RestSetting.current)"
     }
 }

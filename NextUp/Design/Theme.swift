@@ -49,7 +49,7 @@ struct CapsLabel: View {
 
     var body: some View {
         Text(text.uppercased())
-            .font(.system(size: 12, weight: .bold))
+            .scaledFont(12, weight: .bold)
             .tracking(0.7)
             .foregroundStyle(color)
     }
@@ -94,7 +94,7 @@ struct PrimaryButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 18, weight: .heavy))
+            .scaledFont(18, weight: .heavy)
             .foregroundStyle(foreground)
             .frame(maxWidth: .infinity)
             .frame(height: height)
@@ -112,7 +112,7 @@ struct ChipButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 15, weight: .semibold))
+            .scaledFont(15, weight: .semibold)
             .foregroundStyle(foreground)
             .padding(.horizontal, 16)
             .frame(minHeight: 44)
@@ -134,7 +134,7 @@ struct CircleIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 16, weight: .heavy))
+                .scaledFont(16, weight: .heavy)
                 .foregroundStyle(foreground)
                 .frame(width: 44, height: 44)
                 .background(fill, in: Circle())
@@ -217,5 +217,29 @@ struct FlowLayout: Layout {
             rows[rows.count - 1] = row
         }
         return rows.filter { !$0.indices.isEmpty }
+    }
+}
+
+/// A fixed design size that still grows and shrinks with the iPhone's text size setting
+/// (Settings → Display & Brightness → Text Size). At the standard setting it is exactly `size`.
+struct ScaledFont: ViewModifier {
+    @ScaledMetric private var size: CGFloat
+    private let weight: Font.Weight
+    private let design: Font.Design
+
+    init(size: CGFloat, weight: Font.Weight, design: Font.Design) {
+        _size = ScaledMetric(wrappedValue: size, relativeTo: .body)
+        self.weight = weight
+        self.design = design
+    }
+
+    func body(content: Content) -> some View {
+        content.font(.system(size: size, weight: weight, design: design))
+    }
+}
+
+extension View {
+    func scaledFont(_ size: CGFloat, weight: Font.Weight = .regular, design: Font.Design = .default) -> some View {
+        modifier(ScaledFont(size: size, weight: weight, design: design))
     }
 }

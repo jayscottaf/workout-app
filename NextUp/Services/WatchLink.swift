@@ -100,7 +100,7 @@ final class WatchLink: NSObject, ObservableObject {
             snapshot.active = WatchWorkout(
                 id: active.id, title: active.title, startedAt: active.startedAt,
                 trackHealth: !active.savedToHealth,
-                currentEntryID: active.entries.contains { $0.id == currentEntryID } ? currentEntryID : nil,
+                currentEntryID: active.allEntries.contains { $0.id == currentEntryID } ? currentEntryID : nil,
                 entries: active.sortedEntries.map { entry in
                     WatchEntry(id: entry.id, name: entry.name, restSeconds: entry.restSeconds,
                                increment: entry.increment, isBodyweight: entry.isBodyweight, bar: entry.plateBar,
@@ -173,7 +173,7 @@ final class WatchLink: NSObject, ObservableObject {
                 currentEntryID = entryID
             case .rest(let rest):
                 let workout = fetchWorkouts().first { $0.endedAt == nil }
-                let current = workout?.entries.first { $0.id == currentEntryID }
+                let current = workout?.allEntries.first { $0.id == currentEntryID }
                 RestTimer.shared.follow(rest, title: workout?.title ?? "", next: workout?.nextUpText(after: current) ?? "")
             }
         }
@@ -200,15 +200,15 @@ final class WatchLink: NSObject, ObservableObject {
 
     private func activeEntry(where match: (ExerciseEntry) -> Bool) -> (Workout, ExerciseEntry)? {
         for workout in fetchWorkouts() where workout.endedAt == nil {
-            if let entry = workout.entries.first(where: match) { return (workout, entry) }
+            if let entry = workout.allEntries.first(where: match) { return (workout, entry) }
         }
         return nil
     }
 
     /// Returns the personal-record text if the set was one.
     private func log(setID: UUID, weight: Double, reps: Int, at date: Date, context: ModelContext) -> String? {
-        guard let (_, entry) = activeEntry(where: { $0.sets.contains { $0.id == setID } }),
-              let set = entry.sets.first(where: { $0.id == setID }), set.completedAt == nil else { return nil }
+        guard let (_, entry) = activeEntry(where: { $0.allSets.contains { $0.id == setID } }),
+              let set = entry.allSets.first(where: { $0.id == setID }), set.completedAt == nil else { return nil }
         set.weight = max(0, weight)
         set.reps = max(1, reps)
         let kind = Store.complete(set, in: entry, history: Store.history(fetchWorkouts()), context: context, at: date)
@@ -271,7 +271,7 @@ final class WatchLink: NSObject, ObservableObject {
     private func addOptions() -> [WatchAddOption] {
         guard let workout = fetchWorkouts().first(where: { $0.endedAt == nil }) else { return [] }
         let gym = gym(for: workout)?.info
-        let taken = Set(workout.entries.map(\.exerciseID))
+        let taken = Set(workout.allEntries.map(\.exerciseID))
         return MuscleGroup.allCases.flatMap { group in
             ExerciseCatalog.all
                 .filter { $0.muscle.group == group && !taken.contains($0.id) && Planner.isAvailable($0, gym: gym) }
@@ -282,7 +282,7 @@ final class WatchLink: NSObject, ObservableObject {
     private func add(exerciseID: String, context: ModelContext) {
         guard let workout = fetchWorkouts().first(where: { $0.endedAt == nil }),
               let exercise = ExerciseCatalog.exercise(exerciseID),
-              !workout.entries.contains(where: { $0.exerciseID == exerciseID }) else { return }
+              !workout.allEntries.contains(where: { $0.exerciseID == exerciseID }) else { return }
         Store.add(exercise, to: workout, gym: gym(for: workout), history: Store.history(fetchWorkouts()),
                   overrides: overrides(), context: context)
     }

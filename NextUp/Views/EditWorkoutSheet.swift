@@ -20,10 +20,10 @@ struct EditWorkoutSheet: View {
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Edit workout")
-                            .font(Theme.rounded(26))
+                            .scaledFont(26, weight: .heavy, design: .rounded)
                             .accessibilityAddTraits(.isHeader)
                         Text("Tap a set to change it.")
-                            .font(.system(size: 14))
+                            .scaledFont(14)
                             .foregroundStyle(Theme.muted)
                     }
                     Spacer()
@@ -34,7 +34,7 @@ struct EditWorkoutSheet: View {
 
                 ForEach(workout.sortedEntries) { entry in
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(entry.name).font(.system(size: 16, weight: .bold))
+                        Text(entry.name).scaledFont(16, weight: .bold)
                         ForEach(entry.completedSets) { set in
                             if editing == set.id {
                                 editor(set, entry: entry)
@@ -63,15 +63,15 @@ struct EditWorkoutSheet: View {
         Button { editing = set.id } label: {
             HStack(spacing: 14) {
                 Text("\(set.index + 1)")
-                    .font(.system(size: 13, weight: .bold))
+                    .scaledFont(13, weight: .bold)
                     .foregroundStyle(Theme.muted)
                     .frame(width: 22, alignment: .leading)
                 Text(label(set))
-                    .font(Theme.rounded(19, .bold))
+                    .scaledFont(19, weight: .bold, design: .rounded)
                     .monospacedDigit()
                 Spacer(minLength: 0)
                 Image(systemName: "pencil")
-                    .font(.system(size: 14, weight: .bold))
+                    .scaledFont(14, weight: .bold)
                     .foregroundStyle(Theme.muted)
             }
             .padding(.horizontal, 14)
@@ -127,12 +127,12 @@ struct EditWorkoutSheet: View {
             TypeableValue(label: typeLabel, onType: onType) {
                 VStack(spacing: 0) {
                     Text(value)
-                        .font(Theme.rounded(26))
+                        .scaledFont(26, weight: .heavy, design: .rounded)
                         .monospacedDigit()
                         .minimumScaleFactor(0.6)
                         .lineLimit(1)
                     Text(unit)
-                        .font(.system(size: 12, weight: .semibold))
+                        .scaledFont(12, weight: .semibold)
                         .foregroundStyle(Theme.muted)
                         .lineLimit(1)
                 }

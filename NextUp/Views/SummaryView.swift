@@ -27,13 +27,13 @@ struct SummaryView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     CapsLabel(isFresh ? "Workout done" : "Workout", color: Theme.volt)
                     Text(workout.title)
-                        .font(Theme.rounded(38))
+                        .scaledFont(38, weight: .heavy, design: .rounded)
                         .tracking(-0.8)
                         .minimumScaleFactor(0.7)
                         .lineLimit(1)
                         .accessibilityAddTraits(.isHeader)
                     Text(subtitle)
-                        .font(.system(size: 15))
+                        .scaledFont(15)
                         .foregroundStyle(Theme.muted)
                 }
                 .padding(.bottom, 8)
@@ -53,7 +53,7 @@ struct SummaryView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     CapsLabel("What it means")
                     Text(Store.summaryText(workout))
-                        .font(.system(size: 15))
+                        .scaledFont(15)
                         .lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -68,7 +68,7 @@ struct SummaryView: View {
                         CapsLabel("What you did")
                         Spacer()
                         Button("Edit") { editing = true }
-                            .font(.system(size: 14, weight: .semibold))
+                            .scaledFont(14, weight: .semibold)
                             .foregroundStyle(Theme.volt)
                             .frame(minWidth: 44, minHeight: 32, alignment: .trailing)
                             .contentShape(Rectangle())
@@ -78,9 +78,9 @@ struct SummaryView: View {
                     }
                     ForEach(workout.sortedEntries) { entry in
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(entry.name).font(.system(size: 15, weight: .bold))
+                            Text(entry.name).scaledFont(15, weight: .bold)
                             Text(setsLine(entry))
-                                .font(.system(size: 14))
+                                .scaledFont(14)
                                 .monospacedDigit()
                                 .foregroundStyle(Theme.muted)
                         }
@@ -93,7 +93,7 @@ struct SummaryView: View {
                         keepGoing()
                     } label: {
                         Label("Keep going: add exercises or sets", systemImage: "plus")
-                            .font(.system(size: 15, weight: .semibold))
+                            .scaledFont(15, weight: .semibold)
                             .frame(maxWidth: .infinity, minHeight: 48)
                             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.line, lineWidth: 1))
                     }
@@ -103,7 +103,7 @@ struct SummaryView: View {
 
                 if !isFresh {
                     Button("Delete this workout", role: .destructive) { confirmDelete = true }
-                        .font(.system(size: 15, weight: .semibold))
+                        .scaledFont(15, weight: .semibold)
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
             }
@@ -116,7 +116,7 @@ struct SummaryView: View {
             VStack(spacing: 10) {
                 if workout.savedToHealth {
                     Label("Saved to Apple Health", systemImage: "checkmark")
-                        .font(.system(size: 13))
+                        .scaledFont(13)
                         .foregroundStyle(Theme.muted)
                 }
                 Button("Done", action: onDone)
@@ -165,20 +165,20 @@ struct SummaryView: View {
                         withAnimation(.easeInOut(duration: 0.2)) { openMuscle = open ? nil : item.muscle }
                     } label: {
                     HStack(alignment: .firstTextBaseline) {
-                        Text(item.muscle.title).font(.system(size: 15, weight: .semibold))
+                        Text(item.muscle.title).scaledFont(15, weight: .semibold)
                         if split {
                             Image(systemName: "chevron.down")
-                                .font(.system(size: 10, weight: .heavy))
+                                .scaledFont(10, weight: .heavy)
                                 .foregroundStyle(Theme.muted)
                                 .rotationEffect(.degrees(open ? 180 : 0))
                         }
                         Spacer(minLength: 8)
                         Text(Self.setsText(item.mainSets))
-                            .font(.system(size: 15, weight: .bold))
+                            .scaledFont(15, weight: .bold)
                             .monospacedDigit()
                         if item.helperSets > 0 {
                             Text("+ \(item.helperSets) helping")
-                                .font(.system(size: 13))
+                                .scaledFont(13)
                                 .monospacedDigit()
                                 .foregroundStyle(Theme.muted)
                         }
@@ -195,7 +195,7 @@ struct SummaryView: View {
                     if open {
                         Text(MuscleParts.sets(items, muscle: item.muscle)
                             .map { "\($0.part) \($0.sets)" }.joined(separator: " · "))
-                            .font(.system(size: 13))
+                            .scaledFont(13)
                             .monospacedDigit()
                             .foregroundStyle(Theme.muted)
                             .padding(.leading, 12)
@@ -204,7 +204,7 @@ struct SummaryView: View {
                 }
                 if !helpersOnly.isEmpty {
                     Text("Also helped: " + helpersOnly.map { "\($0.muscle.title) \($0.helperSets)" }.joined(separator: " · "))
-                        .font(.system(size: 13))
+                        .scaledFont(13)
                         .monospacedDigit()
                         .foregroundStyle(Theme.muted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -253,12 +253,12 @@ struct SummaryView: View {
     private func stat(_ value: String, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(value)
-                .font(Theme.rounded(24))
+                .scaledFont(24, weight: .heavy, design: .rounded)
                 .monospacedDigit()
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
             Text(label)
-                .font(.system(size: 12))
+                .scaledFont(12)
                 .foregroundStyle(Theme.muted)
         }
         .card(padding: 14, radius: 20)
@@ -268,22 +268,22 @@ struct SummaryView: View {
     private func recordsCard(_ records: [SetEntry]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Image(systemName: "trophy.fill").font(.system(size: 22, weight: .bold))
+                Image(systemName: "trophy.fill").scaledFont(22, weight: .bold)
                 Text("\(records.count) personal record\(records.count == 1 ? "" : "s")")
-                    .font(Theme.rounded(22))
+                    .scaledFont(22, weight: .heavy, design: .rounded)
             }
             VStack(spacing: 8) {
                 ForEach(records) { set in
                     HStack {
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(set.entry?.name ?? "Exercise").font(.system(size: 15, weight: .heavy))
+                            Text(set.entry?.name ?? "Exercise").scaledFont(15, weight: .heavy)
                             Text(set.prKind?.text(weight: set.weight, reps: set.reps) ?? "Personal record")
-                                .font(.system(size: 13))
+                                .scaledFont(13)
                                 .foregroundStyle(Theme.onVoltSoft)
                         }
                         Spacer(minLength: 8)
                         Text(set.weight > 0 ? "\(Fmt.weight(set.weight)) × \(set.reps)" : "\(set.reps) reps")
-                            .font(Theme.rounded(18))
+                            .scaledFont(18, weight: .heavy, design: .rounded)
                             .monospacedDigit()
                     }
                     .padding(.horizontal, 14)
@@ -302,9 +302,9 @@ struct SummaryView: View {
                 Text(status.goalReached
                      ? "Week goal reached: \(status.thisWeek) of \(status.goal)"
                      : "\(status.thisWeek) of \(status.goal) this week")
-                    .font(.system(size: 16, weight: .bold))
+                    .scaledFont(16, weight: .bold)
                 Text(weekDetail(status))
-                    .font(.system(size: 13))
+                    .scaledFont(13)
                     .foregroundStyle(Theme.muted)
             }
             Spacer(minLength: 0)

@@ -71,7 +71,7 @@ enum Store {
                     overrides: [String: ClosedRange<Int>], context: ModelContext) {
         let planned = Planner.planExercise(exercise, slotID: nil, gym: gym?.info, history: history,
                                            rangeOverrides: overrides, quick: workout.isQuick)
-        let order = (workout.entries.map(\.order).max() ?? -1) + 1
+        let order = (workout.allEntries.map(\.order).max() ?? -1) + 1
         addEntry(planned, order: order, to: workout, context: context)
         try? context.save()
     }
@@ -81,7 +81,7 @@ enum Store {
                      overrides: [String: ClosedRange<Int>], context: ModelContext) {
         var planned = Planner.planExercise(exercise, slotID: entry.slotID, gym: gym?.info, history: history,
                                            rangeOverrides: overrides, quick: workout.isQuick)
-        for set in entry.sets.filter({ $0.completedAt == nil }) {
+        for set in entry.allSets.filter({ $0.completedAt == nil }) {
             context.delete(set)
         }
         if entry.completedSets.isEmpty {
@@ -91,13 +91,36 @@ enum Store {
             let remaining = max(1, planned.suggestion.targets.count - entry.completedSets.count)
             planned.suggestion.targets = Array(planned.suggestion.targets.prefix(remaining))
             planned.slotID = nil
-            for other in workout.entries where other.order > entry.order { other.order += 1 }
+            for other in workout.allEntries where other.order > entry.order { other.order += 1 }
             addEntry(planned, order: entry.order + 1, to: workout, context: context)
         }
         try? context.save()
     }
 
     /// "Do it later": move an exercise to the end of the workout, for when its machine is busy.
+    /// Pair two exercises as a superset: `partner` moves to right after `entry`, and their sets alternate.
+    static func superset(_ entry: ExerciseEntry, with partner: ExerciseEntry, in workout: Workout, context: ModelContext) {
+        for other in workout.allEntries where other.supersetID != nil &&
+            (other.supersetID == entry.supersetID || other.supersetID == partner.supersetID) {
+            other.supersetID = nil
+        }
+        let group = UUID()
+        entry.supersetID = group
+        partner.supersetID = group
+        var ordered = workout.sortedEntries.filter { $0.id != partner.id }
+        let at = (ordered.firstIndex { $0.id == entry.id } ?? ordered.count - 1) + 1
+        ordered.insert(partner, at: at)
+        for (order, item) in ordered.enumerated() { item.order = order }
+        try? context.save()
+    }
+
+    /// Back to separate exercises.
+    static func endSuperset(_ entry: ExerciseEntry, in workout: Workout, context: ModelContext) {
+        guard let group = entry.supersetID else { return }
+        for other in workout.allEntries where other.supersetID == group { other.supersetID = nil }
+        try? context.save()
+    }
+
     static func moveToEnd(_ entry: ExerciseEntry, in workout: Workout, context: ModelContext) {
         let others = workout.sortedEntries.filter { $0.id != entry.id }
         for (order, other) in others.enumerated() { other.order = order }
@@ -117,7 +140,7 @@ enum Store {
             machine.increment = Units.convertStep(machine.increment, from: old, to: unit)
         }
         let open = (try? context.fetch(FetchDescriptor<Workout>(predicate: #Predicate { $0.endedAt == nil }))) ?? []
-        for entry in open.flatMap(\.entries) {
+        for entry in open.flatMap(\.allEntries) {
             entry.increment = Units.convertStep(entry.increment, from: old, to: unit)
         }
         Units.current = unit
@@ -129,7 +152,7 @@ enum Store {
     static func setIncrement(_ value: Double, for entry: ExerciseEntry, gym: Gym?, context: ModelContext) {
         guard value > 0 else { return }
         entry.increment = value
-        if let id = entry.equipmentID, let equipment = gym?.equipment.first(where: { $0.id == id }) {
+        if let id = entry.equipmentID, let equipment = gym?.items.first(where: { $0.id == id }) {
             equipment.increment = value
         }
         try? context.save()
@@ -137,7 +160,7 @@ enum Store {
 
     /// Turn a kind of equipment on or off for a gym. Off removes every piece of that kind.
     static func setHas(_ type: EquipmentType, _ has: Bool, gym: Gym, context: ModelContext) {
-        let current = gym.equipment.filter { $0.typeID == type.id }
+        let current = gym.items.filter { $0.typeID == type.id }
         if has, current.isEmpty {
             let item = Equipment(typeID: type.id, name: type.name, increment: type.step)
             context.insert(item)
@@ -181,7 +204,7 @@ enum Store {
         try? context.save()
         loadCustom(context)
         if let gym, equipmentID != EquipmentCatalog.bodyweightID, let type = EquipmentCatalog.type(equipmentID),
-           !gym.equipment.contains(where: { $0.typeID == equipmentID }) {
+           !gym.items.contains(where: { $0.typeID == equipmentID }) {
             setHas(type, true, gym: gym, context: context)
         }
         return exercise.def
@@ -230,7 +253,7 @@ enum Store {
         let machineID = exercise.equipmentID
         if machineID.hasPrefix(CustomEquipment.prefix) {
             for item in (try? context.fetch(FetchDescriptor<Equipment>(predicate: #Predicate { $0.typeID == machineID }))) ?? [] {
-                if let gym = item.gym, !gym.equipment.contains(where: { $0.typeID == builtIn.equipment }) {
+                if let gym = item.gym, !gym.items.contains(where: { $0.typeID == builtIn.equipment }) {
                     setHas(builtIn.equipmentType, true, gym: gym, context: context)
                 }
             }
@@ -318,8 +341,8 @@ enum Store {
             try? context.save()
             return false
         }
-        for entry in Array(workout.entries) {
-            for set in entry.sets.filter({ $0.completedAt == nil }) { context.delete(set) }
+        for entry in Array(workout.allEntries) {
+            for set in entry.allSets.filter({ $0.completedAt == nil }) { context.delete(set) }
             if entry.completedSets.isEmpty { context.delete(entry) }
         }
         workout.endedAt = date
@@ -342,10 +365,10 @@ enum Store {
 
     /// Remove one logged set. An exercise left with no sets goes too.
     static func remove(_ set: SetEntry, from entry: ExerciseEntry, context: ModelContext) {
-        entry.sets.removeAll { $0.id == set.id }
+        entry.sets?.removeAll { $0.id == set.id }
         context.delete(set)
-        if entry.sets.isEmpty {
-            entry.workout?.entries.removeAll { $0.id == entry.id }
+        if entry.allSets.isEmpty {
+            entry.workout?.entries?.removeAll { $0.id == entry.id }
             context.delete(entry)
         } else {
             for (index, remaining) in entry.sortedSets.enumerated() { remaining.index = index }

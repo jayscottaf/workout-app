@@ -31,6 +31,8 @@ struct LoggingView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.openURL) private var openURL
     @AppStorage("keptPairs") private var keptPairs = ""
+    /// Hides the one-line tip once you have marked how a set felt.
+    @AppStorage("usedEffort") private var usedEffort = false
     @EnvironmentObject private var rest: RestTimer
     @EnvironmentObject private var health: HealthService
     @Query(sort: \Workout.startedAt, order: .reverse) private var workouts: [Workout]
@@ -45,8 +47,13 @@ struct LoggingView: View {
     @State private var banner: RecordBanner?
     /// Exercises whose warm-up list is open. Closed by default to keep the working set in view.
     @State private var openWarmUps: Set<PersistentIdentifier> = []
+    /// Exercises whose full "why today's targets" text is open. Two lines by default.
+    @State private var openExplanations: Set<PersistentIdentifier> = []
     /// Exercises whose form tips are open. Closed by default.
     @State private var openTips: Set<PersistentIdentifier> = []
+    /// The machine whose settings (seat, pads) are being edited, and the text so far.
+    @State private var editingNotes: Equipment?
+    @State private var notesDraft = ""
     /// The set whose weight is being typed in, after a tap on the weight number.
     @State private var typingWeight: SetEntry?
 
@@ -105,6 +112,18 @@ struct LoggingView: View {
             }
         }
         .modifier(TypeWeightAlert(typing: $typingWeight))
+        .alert("Machine settings", isPresented: Binding(get: { editingNotes != nil }, set: { if !$0 { editingNotes = nil } }),
+               presenting: editingNotes) { machine in
+            TextField("Seat 4, back pad 2", text: $notesDraft)
+                .accessibilityIdentifier("machineNotesField")
+            Button("Save") {
+                machine.notes = notesDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                try? context.save()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { machine in
+            Text("Remembered for \(machine.name) at \(gym?.name ?? "this gym").")
+        }
         .animation(.spring(duration: 0.35), value: banner)
         .animation(.easeOut(duration: 0.2), value: rest.isRunning)
         .sheet(item: $swapping) { entry in
@@ -120,7 +139,7 @@ struct LoggingView: View {
             AddExerciseSheet(gym: gym, excluded: Set(entries.map(\.exerciseID)), current: entries.map(\.exerciseID)) { exercise in
                 Store.add(exercise, to: workout, gym: gym, history: history,
                           overrides: Store.rangeOverrides(prefs), context: context)
-                index = workout.entries.count - 1
+                index = workout.allEntries.count - 1
                 showAdd = false
             }
         }
@@ -147,10 +166,10 @@ struct LoggingView: View {
                     .accessibilityIdentifier("finishWorkout")
                 Spacer()
                 VStack(spacing: 1) {
-                    Text(workout.title).font(.system(size: 15, weight: .bold))
+                    Text(workout.title).scaledFont(15, weight: .bold)
                     TimelineView(.periodic(from: .now, by: 1)) { timeline in
                         Text("\(elapsed(at: timeline.date)) · \(position + 1) of \(max(entries.count, 1))")
-                            .font(.system(size: 13))
+                            .scaledFont(13)
                             .monospacedDigit()
                             .foregroundStyle(Theme.muted)
                     }
@@ -160,9 +179,9 @@ struct LoggingView: View {
                             HStack(spacing: 3) {
                                 Image(systemName: "mappin.circle.fill")
                                 Text(gym.name).lineLimit(1)
-                                Image(systemName: "chevron.down").font(.system(size: 9, weight: .heavy))
+                                Image(systemName: "chevron.down").scaledFont(9, weight: .heavy)
                             }
-                            .font(.system(size: 13, weight: .semibold))
+                            .scaledFont(13, weight: .semibold)
                             .foregroundStyle(Theme.volt)
                             .frame(minHeight: 24)
                             .contentShape(Rectangle())
@@ -175,6 +194,25 @@ struct LoggingView: View {
                 Spacer()
                 Menu {
                     Button { showAdd = true } label: { Label("Add an exercise", systemImage: "plus") }
+                    if entries.indices.contains(position) {
+                        let current = entries[position]
+                        if current.supersetID != nil {
+                            Button { Store.endSuperset(current, in: workout, context: context) } label: {
+                                Label("Stop the superset", systemImage: "link.badge.plus")
+                            }
+                        } else {
+                            let others = entries.filter { $0.id != current.id && !$0.isDone }
+                            if !current.isDone, !others.isEmpty {
+                                Menu {
+                                    ForEach(others) { other in
+                                        Button(other.name) { Store.superset(current, with: other, in: workout, context: context) }
+                                    }
+                                } label: {
+                                    Label("Superset \(current.name) with…", systemImage: "link")
+                                }
+                            }
+                        }
+                    }
                     if gym != nil {
                         Button { showEquipment = true } label: {
                             Label("Equipment at \(gym?.name ?? "this gym")", systemImage: "dumbbell")
@@ -182,12 +220,12 @@ struct LoggingView: View {
                     }
                 } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .heavy))
+                        .scaledFont(16, weight: .heavy)
                         .foregroundStyle(Theme.volt)
                         .frame(width: 44, height: 44)
                         .background(Theme.surface, in: Circle())
                 }
-                .accessibilityLabel("Add an exercise or change gym equipment")
+                .accessibilityLabel("Add an exercise, make a superset or change gym equipment")
                 .accessibilityIdentifier("addMenu")
             }
             HStack(spacing: 4) {
@@ -221,14 +259,21 @@ struct LoggingView: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(entry.name)
-                        .font(Theme.rounded(30))
+                        .scaledFont(30, weight: .heavy, design: .rounded)
                         .tracking(-0.5)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
                     Text(subtitle(entry))
-                        .font(.system(size: 14))
+                        .scaledFont(14)
                         .foregroundStyle(Theme.muted)
                     stepMenu(entry)
+                    machineNotes(entry)
+                    if let partner = workout.partner(of: entry) {
+                        Label("Superset with \(partner.name) · alternate sets", systemImage: "link")
+                            .scaledFont(13, weight: .semibold)
+                            .foregroundStyle(Theme.volt)
+                            .accessibilityIdentifier("supersetLabel")
+                    }
                 }
                 Spacer(minLength: 0)
                 VStack(alignment: .trailing, spacing: 8) {
@@ -257,17 +302,32 @@ struct LoggingView: View {
                 }
             }
 
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: icon(for: entry))
-                    .font(.system(size: 15, weight: .heavy))
-                    .foregroundStyle(Theme.volt)
-                    .accessibilityHidden(true)
-                Text(entry.explanation)
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color(hex: 0xDDE8C2))
-                    .fixedSize(horizontal: false, vertical: true)
+            // Why today's targets: two lines at first, so the set you are doing stays in view. Tap for the rest.
+            let explained = openExplanations.contains(entry.persistentModelID)
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if explained { openExplanations.remove(entry.persistentModelID) } else { openExplanations.insert(entry.persistentModelID) }
+                }
+            } label: {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: icon(for: entry))
+                        .scaledFont(15, weight: .heavy)
+                        .foregroundStyle(Theme.volt)
+                        .accessibilityHidden(true)
+                    Text(entry.explanation)
+                        .scaledFont(14)
+                        .foregroundStyle(Color(hex: 0xDDE8C2))
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(explained ? nil : 2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             .card(padding: 12, radius: 16, color: Theme.voltDim)
+            .accessibilityLabel(entry.explanation)
+            .accessibilityIdentifier("explanation")
 
             if let exercise = entry.exercise,
                let overlap = Overlap.find(exercise, among: entries.prefix(position).compactMap(\.exercise), kept: Overlap.keptPairs(keptPairs)) {
@@ -289,11 +349,18 @@ struct LoggingView: View {
                     }
                 }
                 Button("Add a set") { Store.addSet(to: entry, context: context) }
-                    .font(.system(size: 14, weight: .semibold))
+                    .scaledFont(14, weight: .semibold)
                     .foregroundStyle(Theme.muted)
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.line, lineWidth: 1))
                     .buttonStyle(.plain)
+                if !usedEffort, !entry.completedSets.isEmpty {
+                    Text("Tip: press and hold a done set to mark it easy, hard or failed. It's optional, and it fine-tunes the next suggestion.")
+                        .scaledFont(12)
+                        .foregroundStyle(Theme.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             formCard(entry)
@@ -311,16 +378,40 @@ struct LoggingView: View {
         }
     }
 
+    /// Your settings for this machine at this gym ("Seat 4, back pad 2"). Machines only.
+    @ViewBuilder
+    private func machineNotes(_ entry: ExerciseEntry) -> some View {
+        if let id = entry.equipmentID, let machine = gym?.items.first(where: { $0.id == id }),
+           machine.type?.category == .machine {
+            Button {
+                notesDraft = machine.notes
+                editingNotes = machine
+            } label: {
+                Label(machine.notes.isEmpty ? "Add machine settings" : machine.notes,
+                      systemImage: machine.notes.isEmpty ? "plus.circle" : "slider.horizontal.3")
+                    .scaledFont(13, weight: .semibold)
+                    .foregroundStyle(machine.notes.isEmpty ? Theme.muted : Theme.text)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .frame(minHeight: 28, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(machine.notes.isEmpty ? "Add settings for this machine" : "Machine settings: \(machine.notes). Edit")
+            .accessibilityIdentifier("machineNotes")
+        }
+    }
+
     /// Heads-up when this exercise repeats the job of one done earlier in the workout.
     private func overlapCard(_ overlap: Overlap, entry: ExerciseEntry) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.2")
-                .font(.system(size: 14, weight: .heavy))
+                .scaledFont(14, weight: .heavy)
                 .foregroundStyle(Theme.amber)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 6) {
                 Text(overlap.message)
-                    .font(.system(size: 14))
+                    .scaledFont(14)
                     .foregroundStyle(Theme.text)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 18) {
@@ -333,7 +424,7 @@ struct LoggingView: View {
                     }
                     .accessibilityIdentifier("overlapKeep")
                 }
-                .font(.system(size: 14, weight: .semibold))
+                .scaledFont(14, weight: .semibold)
                 .foregroundStyle(Theme.amber)
                 .buttonStyle(.plain)
                 .frame(minHeight: 32)
@@ -359,7 +450,7 @@ struct LoggingView: View {
                     CapsLabel("How to do it")
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 12, weight: .heavy))
+                        .scaledFont(12, weight: .heavy)
                         .foregroundStyle(Theme.muted)
                         .rotationEffect(.degrees(open ? 180 : 0))
                 }
@@ -374,7 +465,7 @@ struct LoggingView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Circle().fill(Theme.volt).frame(width: 5, height: 5).accessibilityHidden(true)
                         Text(tip)
-                            .font(.system(size: 15))
+                            .scaledFont(15)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -383,7 +474,7 @@ struct LoggingView: View {
                     if let url = URL(string: "https://www.youtube.com/results?search_query=\(query)") { openURL(url) }
                 } label: {
                     Label("Watch on YouTube", systemImage: "play.rectangle")
-                        .font(.system(size: 14, weight: .semibold))
+                        .scaledFont(14, weight: .semibold)
                         .foregroundStyle(Theme.volt)
                         .frame(minHeight: 36)
                 }
@@ -418,9 +509,9 @@ struct LoggingView: View {
         } label: {
             HStack(spacing: 4) {
                 Text("\(Fmt.lb(entry.increment)) steps")
-                Image(systemName: "chevron.down").font(.system(size: 10, weight: .heavy))
+                Image(systemName: "chevron.down").scaledFont(10, weight: .heavy)
             }
-            .font(.system(size: 14, weight: .semibold))
+            .scaledFont(14, weight: .semibold)
             .foregroundStyle(Theme.volt)
             .frame(minHeight: 30)
         }
@@ -447,27 +538,33 @@ struct LoggingView: View {
         Button { Store.reopen(set, context: context) } label: {
             HStack(spacing: 14) {
                 Text("\(set.index + 1)")
-                    .font(.system(size: 13, weight: .bold))
+                    .scaledFont(13, weight: .bold)
                     .foregroundStyle(Theme.muted)
                     .frame(width: 22, alignment: .leading)
                 Text("\(weightText(set.weight, entry: nil)) × \(set.reps)")
-                    .font(Theme.rounded(20, .bold))
+                    .scaledFont(20, weight: .bold, design: .rounded)
                     .monospacedDigit()
                 Spacer(minLength: 0)
+                if let effort = set.effort {
+                    Text(effort.title.uppercased())
+                        .scaledFont(10, weight: .heavy)
+                        .foregroundStyle(effort == .easy ? Theme.volt : Theme.amber)
+                        .lineLimit(1)
+                }
                 if set.prKindRaw != nil {
                     Text("RECORD")
-                        .font(.system(size: 11, weight: .heavy))
+                        .scaledFont(11, weight: .heavy)
                         .foregroundStyle(Theme.onVolt)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Theme.volt, in: RoundedRectangle(cornerRadius: 6))
                 } else if let delta = deltaText(set) {
                     Text(delta)
-                        .font(.system(size: 13, weight: .bold))
+                        .scaledFont(13, weight: .bold)
                         .foregroundStyle(Theme.volt)
                 }
                 Image(systemName: "checkmark")
-                    .font(.system(size: 16, weight: .heavy))
+                    .scaledFont(16, weight: .heavy)
                     .foregroundStyle(Theme.volt)
             }
             .padding(.horizontal, 16)
@@ -475,8 +572,26 @@ struct LoggingView: View {
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Set \(set.index + 1) done: \(weightText(set.weight, entry: nil)) for \(set.reps) reps")
-        .accessibilityHint("Double tap to edit this set")
+        // Optional: how it felt. The next suggestion holds after a failed rep and jumps two steps when every set was easy.
+        .contextMenu {
+            ForEach(Effort.allCases, id: \.self) { effort in
+                Button {
+                    set.effort = set.effort == effort ? nil : effort
+                    usedEffort = true
+                    try? context.save()
+                    Haptics.tap()
+                } label: {
+                    if set.effort == effort { Label(effort.title, systemImage: "checkmark") } else { Text(effort.title) }
+                }
+            }
+        }
+        .accessibilityLabel("Set \(set.index + 1) done: \(weightText(set.weight, entry: nil)) for \(set.reps) reps\(set.effort.map { ", \($0.title)" } ?? "")")
+        .accessibilityHint("Double tap to edit this set. Press and hold to say how it felt")
+        .accessibilityActions {
+            ForEach(Effort.allCases, id: \.self) { effort in
+                Button("Felt \(effort.title.lowercased())") { set.effort = effort; usedEffort = true; try? context.save() }
+            }
+        }
     }
 
     private func deltaText(_ set: SetEntry) -> String? {
@@ -489,14 +604,14 @@ struct LoggingView: View {
     private func pendingRow(_ set: SetEntry, entry: ExerciseEntry) -> some View {
         HStack(spacing: 14) {
             Text("\(set.index + 1)")
-                .font(.system(size: 13, weight: .bold))
+                .scaledFont(13, weight: .bold)
                 .frame(width: 22, alignment: .leading)
             Text("\(weightText(set.weight, entry: entry)) × \(set.reps)")
-                .font(Theme.rounded(20, .bold))
+                .scaledFont(20, weight: .bold, design: .rounded)
                 .monospacedDigit()
             Spacer(minLength: 0)
             Text(set.lastReps == nil ? "up next" : "target")
-                .font(.system(size: 13))
+                .scaledFont(13)
         }
         .foregroundStyle(Theme.muted)
         .padding(.horizontal, 16)
@@ -511,7 +626,7 @@ struct LoggingView: View {
                 CapsLabel("Set \(set.index + 1)", color: Theme.volt)
                 Spacer()
                 Text(set.target.beatText)
-                    .font(.system(size: 13))
+                    .scaledFont(13)
                     .foregroundStyle(Theme.muted)
                     .multilineTextAlignment(.trailing)
             }
@@ -531,15 +646,15 @@ struct LoggingView: View {
             if let bar = entry.plateBar, let plates = Plates.text(total: set.weight, bar: bar) {
                 HStack(spacing: 6) {
                     Image(systemName: "circle.circle.fill")
-                        .font(.system(size: 12, weight: .bold))
+                        .scaledFont(12, weight: .bold)
                         .foregroundStyle(Theme.volt)
                         .accessibilityHidden(true)
                     Text(plates)
-                        .font(.system(size: 14, weight: .semibold))
+                        .scaledFont(14, weight: .semibold)
                         .monospacedDigit()
                     if bar > 0 {
                         Text("· \(Fmt.lb(bar)) bar")
-                            .font(.system(size: 13))
+                            .scaledFont(13)
                             .foregroundStyle(Theme.muted)
                     }
                     Spacer(minLength: 0)
@@ -583,7 +698,7 @@ struct LoggingView: View {
                         CapsLabel("Warm-up first")
                         if !open {
                             Text("\(sets.count) \(sets.count == 1 ? "set" : "sets") · \(range)")
-                                .font(.system(size: 13, weight: .semibold))
+                                .scaledFont(13, weight: .semibold)
                                 .monospacedDigit()
                                 .foregroundStyle(Theme.text)
                                 .lineLimit(1)
@@ -591,11 +706,11 @@ struct LoggingView: View {
                         Spacer(minLength: 0)
                         if open {
                             Text("not logged")
-                                .font(.system(size: 12))
+                                .scaledFont(12)
                                 .foregroundStyle(Theme.muted)
                         }
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 12, weight: .heavy))
+                            .scaledFont(12, weight: .heavy)
                             .foregroundStyle(Theme.muted)
                             .rotationEffect(.degrees(open ? 180 : 0))
                     }
@@ -609,11 +724,11 @@ struct LoggingView: View {
                 ForEach(Array(sets.enumerated()), id: \.offset) { _, set in
                     HStack(spacing: 10) {
                         Text("\(Fmt.lb(set.weight)) × \(set.reps)")
-                            .font(.system(size: 15, weight: .bold))
+                            .scaledFont(15, weight: .bold)
                             .monospacedDigit()
                         if let bar, let plates = Plates.text(total: set.weight, bar: bar) {
                             Text(plates)
-                                .font(.system(size: 13))
+                                .scaledFont(13)
                                 .foregroundStyle(Theme.muted)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
@@ -642,12 +757,12 @@ struct LoggingView: View {
             TypeableValue(label: typeLabel, onType: onType) {
                 VStack(spacing: 0) {
                     Text(value)
-                        .font(Theme.rounded(30))
+                        .scaledFont(30, weight: .heavy, design: .rounded)
                         .monospacedDigit()
                         .minimumScaleFactor(0.6)
                         .lineLimit(1)
                     Text(unit)
-                        .font(.system(size: 12, weight: .semibold))
+                        .scaledFont(12, weight: .semibold)
                         .foregroundStyle(Theme.muted)
                         .lineLimit(1)
                 }
@@ -678,9 +793,19 @@ struct LoggingView: View {
         } else {
             Haptics.tap()
         }
-        let everythingDone = workout.entries.allSatisfy(\.isDone)
+        let everythingDone = workout.allEntries.allSatisfy(\.isDone)
         if everythingDone {
             rest.stop()
+        } else if let partner = workout.partner(of: entry), partner.nextSet != nil,
+                  let target = workout.sortedEntries.firstIndex(where: { $0.id == partner.id }) {
+            // Superset: straight to the other exercise. Rest once both are done for this round.
+            index = target
+            if partner.order > entry.order {
+                rest.stop()
+            } else {
+                rest.start(seconds: RestSetting.seconds(default: max(entry.restSeconds, partner.restSeconds)), title: workout.title,
+                           next: workout.nextUpText(after: partner))
+            }
         } else {
             rest.start(seconds: RestSetting.seconds(default: entry.restSeconds), title: workout.title,
                        next: workout.nextUpText(after: entry))
@@ -688,13 +813,13 @@ struct LoggingView: View {
     }
 
     private var finishTitle: String {
-        let left = workout.entries.reduce(0) { $0 + $1.sets.filter { $0.completedAt == nil }.count }
+        let left = workout.allEntries.reduce(0) { $0 + $1.allSets.filter { $0.completedAt == nil }.count }
         if workout.completedSets.isEmpty { return "Nothing logged yet. Discard this workout?" }
         return left == 0 ? "Finish this workout?" : "Finish now? \(left) set\(left == 1 ? "" : "s") not logged will be left out."
     }
 
     private func requestFinish() {
-        let left = workout.entries.contains { $0.nextSet != nil }
+        let left = workout.allEntries.contains { $0.nextSet != nil }
         if left || workout.completedSets.isEmpty {
             confirmFinish = true
         } else {
@@ -747,7 +872,7 @@ struct RestBar: View {
                 VStack(alignment: .leading, spacing: 0) {
                     CapsLabel("Rest")
                     Text(rest.text)
-                        .font(Theme.rounded(34))
+                        .scaledFont(34, weight: .heavy, design: .rounded)
                         .monospacedDigit()
                         .accessibilityLabel("\(rest.text) of rest left")
                 }
@@ -789,12 +914,12 @@ struct RecordBannerView: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "trophy.fill")
-                .font(.system(size: 22, weight: .bold))
+                .scaledFont(22, weight: .bold)
                 .scaleEffect(burst ? 1 : 0.4)
                 .rotationEffect(.degrees(burst ? 0 : -25))
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.system(size: 16, weight: .heavy))
-                Text(detail).font(.system(size: 13, weight: .medium)).foregroundStyle(Theme.onVoltSoft)
+                Text(title).scaledFont(16, weight: .heavy)
+                Text(detail).scaledFont(13, weight: .medium).foregroundStyle(Theme.onVoltSoft)
             }
             Spacer(minLength: 0)
         }

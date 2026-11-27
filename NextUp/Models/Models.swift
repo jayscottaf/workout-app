@@ -8,7 +8,9 @@ final class Gym {
     var id: UUID = UUID()
     var name: String = ""
     var createdAt: Date = Date()
-    @Relationship(deleteRule: .cascade, inverse: \Equipment.gym) var equipment: [Equipment] = []
+    /// Optional because iCloud sync requires it; read it through `items`.
+    @Relationship(deleteRule: .cascade, inverse: \Equipment.gym) var equipment: [Equipment]? = []
+    var items: [Equipment] { equipment ?? [] }
 
     init(name: String) {
         self.id = UUID()
@@ -16,7 +18,7 @@ final class Gym {
         self.createdAt = Date()
     }
 
-    var sortedEquipment: [Equipment] { equipment.sorted { $0.createdAt < $1.createdAt } }
+    var sortedEquipment: [Equipment] { items.sorted { $0.createdAt < $1.createdAt } }
 
     var info: GymInfo {
         GymInfo(id: id, name: name, equipment: sortedEquipment.map(\.info))
@@ -31,6 +33,8 @@ final class Equipment {
     /// The real jump between weights on this piece of equipment, in pounds.
     var increment: Double = 5
     var createdAt: Date = Date()
+    /// Your settings for this machine at this gym, like "Seat 4, back pad 2".
+    var notes: String = ""
     var gym: Gym?
 
     init(typeID: String, name: String, increment: Double) {
@@ -58,7 +62,9 @@ final class Workout {
     var gymID: UUID?
     var gymName: String = ""
     var savedToHealth: Bool = false
-    @Relationship(deleteRule: .cascade, inverse: \ExerciseEntry.workout) var entries: [ExerciseEntry] = []
+    /// Optional because iCloud sync requires it; read it through `allEntries`.
+    @Relationship(deleteRule: .cascade, inverse: \ExerciseEntry.workout) var entries: [ExerciseEntry]? = []
+    var allEntries: [ExerciseEntry] { entries ?? [] }
 
     init(day: DayType?, isQuick: Bool, gymID: UUID?, gymName: String, startedAt: Date = Date()) {
         self.id = UUID()
@@ -76,8 +82,14 @@ final class Workout {
         if let title = day?.title, !title.isEmpty { return title }
         return "Workout"
     }
-    var sortedEntries: [ExerciseEntry] { entries.sorted { $0.order < $1.order } }
-    var completedSets: [SetEntry] { entries.flatMap(\.completedSets) }
+    var sortedEntries: [ExerciseEntry] { allEntries.sorted { $0.order < $1.order } }
+
+    /// The other exercise in `entry`'s superset, if it is in one.
+    func partner(of entry: ExerciseEntry) -> ExerciseEntry? {
+        guard let group = entry.supersetID else { return nil }
+        return sortedEntries.first { $0.id != entry.id && $0.supersetID == group }
+    }
+    var completedSets: [SetEntry] { allEntries.flatMap(\.completedSets) }
     var durationMinutes: Int { Int(((endedAt ?? Date()).timeIntervalSince(startedAt) / 60).rounded()) }
     var totalVolume: Double { completedSets.reduce(0) { $0 + $1.weight * Double($1.reps) } }
     var prSets: [SetEntry] { completedSets.filter { $0.prKindRaw != nil } }
@@ -114,7 +126,11 @@ final class ExerciseEntry {
     /// Plain-language reason for today's targets.
     var explanation: String = ""
     var kindRaw: String = ""
-    @Relationship(deleteRule: .cascade, inverse: \SetEntry.entry) var sets: [SetEntry] = []
+    /// Exercises with the same id are a superset: you alternate their sets and rest after each round.
+    var supersetID: UUID?
+    /// Optional because iCloud sync requires it; read it through `allSets`.
+    @Relationship(deleteRule: .cascade, inverse: \SetEntry.entry) var sets: [SetEntry]? = []
+    var allSets: [SetEntry] { sets ?? [] }
     var workout: Workout?
 
     init(exerciseID: String, order: Int) {
@@ -134,14 +150,14 @@ final class ExerciseEntry {
         // A plate-loaded machine you added yourself.
         return exercise.equipment.hasPrefix(CustomEquipment.prefix) && exercise.equipmentType.loading == CustomEquipment.plateLoading ? 0 : nil
     }
-    var sortedSets: [SetEntry] { sets.sorted { $0.index < $1.index } }
+    var sortedSets: [SetEntry] { allSets.sorted { $0.index < $1.index } }
     var completedSets: [SetEntry] { sortedSets.filter { $0.completedAt != nil } }
     var nextSet: SetEntry? { sortedSets.first { $0.completedAt == nil } }
-    var isDone: Bool { !sets.isEmpty && nextSet == nil }
+    var isDone: Bool { !allSets.isEmpty && nextSet == nil }
 
     var record: EntryRecord {
         EntryRecord(exerciseID: exerciseID, historyKey: historyKey, slotID: slotID,
-                    sets: completedSets.map { SetRecord(weight: $0.weight, reps: $0.reps, isPR: $0.prKindRaw != nil) })
+                    sets: completedSets.map { SetRecord(weight: $0.weight, reps: $0.reps, isPR: $0.prKindRaw != nil, effort: $0.effort) })
     }
 }
 
@@ -157,6 +173,8 @@ final class SetEntry {
     var lastReps: Int?
     var completedAt: Date?
     var prKindRaw: String?
+    /// "easy", "hard" or "failed" when you said how the set felt.
+    var effortRaw: String?
     var entry: ExerciseEntry?
 
     init(index: Int, target: SetTarget) {
@@ -172,6 +190,10 @@ final class SetEntry {
 
     var target: SetTarget { SetTarget(weight: targetWeight, reps: targetReps, lastWeight: lastWeight, lastReps: lastReps) }
     var prKind: PRKind? { prKindRaw.flatMap { PRKind(rawValue: $0) } }
+    var effort: Effort? {
+        get { effortRaw.flatMap { Effort(rawValue: $0) } }
+        set { effortRaw = newValue?.rawValue }
+    }
 
     /// Did this set beat the same set last time?
     var beatLastTime: Bool {

@@ -34,6 +34,13 @@ Arguments → add `-demoData`.
 | Streak | Counts weeks where you hit your weekly goal (default 3), not days. |
 | Pounds or kilograms | Settings → Units. Weights are always saved in pounds, so switching never changes your history; what is shown and typed, the plates (20 kg bar, kilogram plates) and the weight steps (5 lb ↔ 2.5 kg) follow the choice, on the phone and the Watch. |
 | Export | Settings → Export workouts (CSV) makes a spreadsheet of every logged set, to save to Files, AirDrop or email as a backup. |
+| Import | Settings → Import from Strong or Hevy reads either app's CSV export. Exercise names are matched to the built-in list ("Bench Press (Barbell)" is the barbell bench press); names that don't match become your own exercises. Importing the same file twice adds nothing. |
+| First run | A short setup the first time: pounds or kilograms, which routine, a weekly goal and your gym's name. |
+| Supersets | In a workout, the top menu → Superset with… pairs two exercises; logging a set jumps to the other one, and rest starts after each round. |
+| Machine settings | Notes per machine at each gym (seat 4, pin 6), shown during the workout and edited from the gym list. |
+| How it felt | Press and hold a logged set to mark it easy, hard or failed. All easy at the top of the range jumps two steps; a failed set holds the weight. Optional. |
+| Larger Text | Text follows the iPhone's text size, up to a large accessibility size. |
+| iCloud | Workouts, gyms and exercises sync through your private iCloud when it is on for the app. Routine and settings stay on the phone. |
 | Privacy | Everything stays on your devices: no accounts, ads, analytics or tracking. `NextUp/PrivacyInfo.xcprivacy` and `NextUpWatch/PrivacyInfo.xcprivacy` are Apple's privacy manifests; The privacy policy is published at https://sites.google.com/view/next-up-privacy-policy (text in `docs/privacy.md`) and linked from Settings. |
 
 ## Apple Watch
@@ -64,6 +71,8 @@ Each exercise has a rep range, for example 8 to 12.
 - **Two in a row without progress:** hold the weight and match last time. If reps fell below the bottom of the
   range, drop about 10% and rebuild.
 - **Two weeks or more away:** start about 10% lighter.
+- **How it felt (optional):** every set marked easy at the top of the range jumps two steps; any set marked
+  failed holds the weight until every set is clean.
 - **First time on a machine:** a light starting guess; whatever you log becomes the baseline.
 
 A set is a personal record when it is the heaviest weight, the most reps at that weight, or the best estimated

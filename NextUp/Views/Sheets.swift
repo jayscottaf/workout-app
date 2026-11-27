@@ -20,16 +20,16 @@ struct SwapSheet: View {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Swap \(entry.name.lowercased())")
-                        .font(Theme.rounded(26))
+                        .scaledFont(26, weight: .heavy, design: .rounded)
                         .accessibilityAddTraits(.isHeader)
                     Text("Same muscles, using what \(gym?.name ?? "this gym") has. Tap one and keep going.")
-                        .font(.system(size: 14))
+                        .scaledFont(14)
                         .foregroundStyle(Theme.muted)
                 }
 
                 if options.isEmpty {
                     Text("Nothing equivalent is set up for this gym. Add more equipment under Gyms.")
-                        .font(.system(size: 15))
+                        .scaledFont(15)
                         .foregroundStyle(Theme.muted)
                         .card(color: Theme.surface2)
                 }
@@ -40,10 +40,10 @@ struct SwapSheet: View {
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 3) {
                                     HStack(spacing: 8) {
-                                        Text(option.exercise.name).font(.system(size: 17, weight: .bold))
+                                        Text(option.exercise.name).scaledFont(17, weight: .bold)
                                         if option.isBestMatch {
                                             Text("BEST MATCH")
-                                                .font(.system(size: 11, weight: .heavy))
+                                                .scaledFont(11, weight: .heavy)
                                                 .foregroundStyle(Theme.onVolt)
                                                 .padding(.horizontal, 6)
                                                 .padding(.vertical, 2)
@@ -51,13 +51,13 @@ struct SwapSheet: View {
                                         }
                                     }
                                     Text(option.detail)
-                                        .font(.system(size: 13))
+                                        .scaledFont(13)
                                         .foregroundStyle(Theme.muted)
                                         .multilineTextAlignment(.leading)
                                 }
                                 Spacer(minLength: 0)
                                 Image(systemName: "chevron.right")
-                                    .font(.system(size: 14, weight: .heavy))
+                                    .scaledFont(14, weight: .heavy)
                                     .foregroundStyle(option.isBestMatch ? Theme.volt : Theme.muted)
                             }
                             .padding(.horizontal, 16)
@@ -85,9 +85,9 @@ struct SwapSheet: View {
                             } label: {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(exercise.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.text)
+                                        Text(exercise.name).scaledFont(15, weight: .semibold).foregroundStyle(Theme.text)
                                         Text("Tap to add \(exercise.equipmentType.name.lowercased()) to this gym and use it")
-                                            .font(.system(size: 13))
+                                            .scaledFont(13)
                                             .foregroundStyle(Theme.muted)
                                             .multilineTextAlignment(.leading)
                                     }
@@ -107,7 +107,7 @@ struct SwapSheet: View {
                 }
 
                 Text("Your choice is remembered for this gym, so it is offered here next time too.")
-                    .font(.system(size: 13))
+                    .scaledFont(13)
                     .foregroundStyle(Theme.muted)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .multilineTextAlignment(.center)
@@ -139,14 +139,14 @@ struct AddExerciseSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Add an exercise")
-                    .font(Theme.rounded(26))
+                    .scaledFont(26, weight: .heavy, design: .rounded)
                     .accessibilityAddTraits(.isHeader)
                 Button { creating = true } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Create your own").font(.system(size: 16, weight: .semibold))
+                            Text("Create your own").scaledFont(16, weight: .semibold)
                             Text("Not on the list? Add it once and it stays.")
-                                .font(.system(size: 13))
+                                .scaledFont(13)
                                 .foregroundStyle(Theme.muted)
                         }
                         Spacer()
@@ -171,13 +171,13 @@ struct AddExerciseSheet: View {
                                     Button { onPick(exercise) } label: {
                                         HStack {
                                             VStack(alignment: .leading, spacing: 2) {
-                                                Text(exercise.name).font(.system(size: 16, weight: .semibold))
+                                                Text(exercise.name).scaledFont(16, weight: .semibold)
                                                 Text("\(exercise.muscle.title) · \(exercise.equipmentType.name)")
-                                                    .font(.system(size: 13))
+                                                    .scaledFont(13)
                                                     .foregroundStyle(Theme.muted)
                                                 if let overlap = Overlap.find(exercise, among: already, kept: Overlap.keptPairs(keptPairs)) {
                                                     Label(overlap.message, systemImage: "exclamationmark.2")
-                                                        .font(.system(size: 13))
+                                                        .scaledFont(13)
                                                         .foregroundStyle(Theme.amber)
                                                         .fixedSize(horizontal: false, vertical: true)
                                                 }
@@ -201,10 +201,10 @@ struct AddExerciseSheet: View {
                                     } label: {
                                         HStack {
                                             VStack(alignment: .leading, spacing: 2) {
-                                                Text(exercise.name).font(.system(size: 16, weight: .semibold))
+                                                Text(exercise.name).scaledFont(16, weight: .semibold)
                                                     .foregroundStyle(Theme.text.opacity(0.75))
                                                 Text("\(exercise.equipmentType.name) · not ticked here yet, tap to add")
-                                                    .font(.system(size: 13))
+                                                    .scaledFont(13)
                                                     .foregroundStyle(Theme.muted)
                                             }
                                             Spacer()

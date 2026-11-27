@@ -416,3 +416,35 @@ final class RecordRecountTests: XCTestCase {
         XCTAssertEqual(after[1][0], [.weight])
     }
 }
+
+final class TypedWeightTests: XCTestCase {
+
+    func testWholeAndDecimalWeights() {
+        XCTAssertEqual(Fmt.parseWeight("225"), 225)
+        XCTAssertEqual(Fmt.parseWeight("122.5"), 122.5)
+        XCTAssertEqual(Fmt.parseWeight(" 135 "), 135)
+    }
+
+    func testCommaDecimalAndUnits() {
+        XCTAssertEqual(Fmt.parseWeight("122,5"), 122.5)
+        XCTAssertEqual(Fmt.parseWeight("225 lb"), 225)
+        XCTAssertEqual(Fmt.parseWeight("45lbs"), 45)
+    }
+
+    func testZeroMeansBodyWeight() {
+        XCTAssertEqual(Fmt.parseWeight("0"), 0)
+    }
+
+    func testRoundsToOneDecimal() {
+        XCTAssertEqual(Fmt.parseWeight("47.34"), 47.3)
+    }
+
+    func testRejectsNonsense() {
+        XCTAssertNil(Fmt.parseWeight(""))
+        XCTAssertNil(Fmt.parseWeight("."))
+        XCTAssertNil(Fmt.parseWeight("abc"))
+        XCTAssertNil(Fmt.parseWeight("-10"))
+        XCTAssertNil(Fmt.parseWeight("1.2.3"))
+        XCTAssertNil(Fmt.parseWeight("5000"))
+    }
+}

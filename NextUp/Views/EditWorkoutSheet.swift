@@ -10,6 +10,7 @@ struct EditWorkoutSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var editing: UUID?
     @State private var changed = false
+    @State private var typingWeight: SetEntry?
 
     var body: some View {
         ScrollView {
@@ -48,6 +49,7 @@ struct EditWorkoutSheet: View {
         }
         .screen()
         .animation(.easeOut(duration: 0.2), value: editing)
+        .modifier(TypeWeightAlert(typing: $typingWeight, onChange: { changed = true }))
         .interactiveDismissDisabled(changed)
     }
 
@@ -87,7 +89,9 @@ struct EditWorkoutSheet: View {
                 stepper(value: set.weight <= 0 ? "BW" : Fmt.weight(set.weight), unit: set.weight <= 0 ? "body weight" : "lb",
                         lessLabel: "Lower weight", moreLabel: "Raise weight",
                         less: { set.weight = max(0, set.weight - entry.increment) },
-                        more: { set.weight += entry.increment })
+                        more: { set.weight += entry.increment },
+                        type: TypeWeightAlert.label(set.weight),
+                        onType: { typingWeight = set })
                 stepper(value: "\(set.reps)", unit: "reps", lessLabel: "One fewer rep", moreLabel: "One more rep",
                         less: { set.reps = max(1, set.reps - 1) },
                         more: { set.reps += 1 })
@@ -110,25 +114,28 @@ struct EditWorkoutSheet: View {
     }
 
     private func stepper(value: String, unit: String, lessLabel: String, moreLabel: String,
-                         less: @escaping () -> Void, more: @escaping () -> Void) -> some View {
+                         less: @escaping () -> Void, more: @escaping () -> Void,
+                         type typeLabel: String? = nil, onType: (() -> Void)? = nil) -> some View {
         HStack(spacing: 0) {
             CircleIconButton(systemName: "minus", label: lessLabel, fill: Theme.line) {
                 less()
                 changed = true
                 Haptics.tap()
             }
-            VStack(spacing: 0) {
-                Text(value)
-                    .font(Theme.rounded(26))
-                    .monospacedDigit()
-                    .minimumScaleFactor(0.6)
-                    .lineLimit(1)
-                Text(unit)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.muted)
-                    .lineLimit(1)
+            TypeableValue(label: typeLabel, onType: onType) {
+                VStack(spacing: 0) {
+                    Text(value)
+                        .font(Theme.rounded(26))
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
+                    Text(unit)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.muted)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
             CircleIconButton(systemName: "plus", label: moreLabel, fill: Theme.line) {
                 more()
                 changed = true

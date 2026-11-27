@@ -45,6 +45,8 @@ struct LoggingView: View {
     @State private var openWarmUps: Set<PersistentIdentifier> = []
     /// Exercises whose form tips are open. Closed by default.
     @State private var openTips: Set<PersistentIdentifier> = []
+    /// The set whose weight is being typed in, after a tap on the weight number.
+    @State private var typingWeight: SetEntry?
 
     private var gym: Gym? { gyms.first { $0.id == workout.gymID } }
 
@@ -100,6 +102,7 @@ struct LoggingView: View {
                 index = target
             }
         }
+        .modifier(TypeWeightAlert(typing: $typingWeight))
         .animation(.spring(duration: 0.35), value: banner)
         .animation(.easeOut(duration: 0.2), value: rest.isRunning)
         .sheet(item: $swapping) { entry in
@@ -516,7 +519,9 @@ struct LoggingView: View {
                         lessLabel: "Lower weight by \(Fmt.weight(entry.increment)) pounds",
                         moreLabel: "Raise weight by \(Fmt.weight(entry.increment)) pounds",
                         less: { set.weight = max(0, set.weight - entry.increment) },
-                        more: { set.weight += entry.increment })
+                        more: { set.weight += entry.increment },
+                        type: TypeWeightAlert.label(set.weight),
+                        onType: { typingWeight = set })
                 stepper(value: "\(set.reps)", unit: "reps", lessLabel: "One fewer rep", moreLabel: "One more rep",
                         less: { set.reps = max(1, set.reps - 1) },
                         more: { set.reps += 1 })
@@ -623,25 +628,29 @@ struct LoggingView: View {
         }
     }
 
+    /// − and + for small changes. When `onType` is given, tapping the number lets you type a value.
     private func stepper(value: String, unit: String, lessLabel: String, moreLabel: String,
-                         less: @escaping () -> Void, more: @escaping () -> Void) -> some View {
+                         less: @escaping () -> Void, more: @escaping () -> Void,
+                         type typeLabel: String? = nil, onType: (() -> Void)? = nil) -> some View {
         HStack(spacing: 0) {
             CircleIconButton(systemName: "minus", label: lessLabel, fill: Theme.line) {
                 less()
                 Haptics.tap()
             }
-            VStack(spacing: 0) {
-                Text(value)
-                    .font(Theme.rounded(30))
-                    .monospacedDigit()
-                    .minimumScaleFactor(0.6)
-                    .lineLimit(1)
-                Text(unit)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.muted)
-                    .lineLimit(1)
+            TypeableValue(label: typeLabel, onType: onType) {
+                VStack(spacing: 0) {
+                    Text(value)
+                        .font(Theme.rounded(30))
+                        .monospacedDigit()
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
+                    Text(unit)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.muted)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
             CircleIconButton(systemName: "plus", label: moreLabel, fill: Theme.line) {
                 more()
                 Haptics.tap()
@@ -816,5 +825,59 @@ struct RecordBannerView: View {
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+/// The number between − and +. With `onType`, a tap on it opens the number pad.
+struct TypeableValue<Content: View>: View {
+    let label: String?
+    let onType: (() -> Void)?
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        if let onType {
+            Button(action: onType) {
+                content().contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(label ?? "")
+            .accessibilityHint("Double tap to type a weight")
+            .accessibilityIdentifier("typeWeight")
+        } else {
+            content()
+        }
+    }
+}
+
+/// Type a weight instead of tapping + many times: 135 to 225 is one tap and three digits.
+/// A blank or unreadable entry leaves the weight as it was.
+struct TypeWeightAlert: ViewModifier {
+    @Binding var typing: SetEntry?
+    var onChange: () -> Void = {}
+    @State private var draft = ""
+
+    static func label(_ weight: Double) -> String {
+        weight > 0 ? "Weight: \(Fmt.weight(weight)) pounds" : "Weight: body weight"
+    }
+
+    func body(content: Content) -> some View {
+        content.alert("Weight", isPresented: Binding(get: { typing != nil }, set: { if !$0 { typing = nil } }),
+                      presenting: typing) { target in
+            TextField(target.weight > 0 ? Fmt.weight(target.weight) : "0", text: $draft)
+                .keyboardType(.decimalPad)
+                .accessibilityIdentifier("typedWeight")
+            Button("Set") {
+                if let value = Fmt.parseWeight(draft), value != target.weight {
+                    target.weight = value
+                    onChange()
+                    Haptics.tap()
+                }
+                draft = ""
+            }
+            .accessibilityIdentifier("setTypedWeight")
+            Button("Cancel", role: .cancel) { draft = "" }
+        } message: { _ in
+            Text("In pounds. 0 means body weight only.")
+        }
     }
 }

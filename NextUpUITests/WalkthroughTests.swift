@@ -417,6 +417,7 @@ final class WalkthroughTests: XCTestCase {
                 app.buttons["logSet"].tap()
                 if app.buttons["Skip rest"].waitForExistence(timeout: 3) { app.buttons["Skip rest"].tap() }
             }
+            sleep(1) // let the rest timer finish sliding away
             shot("54-\(label)-later-set")
             app.terminate()
         }

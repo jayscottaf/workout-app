@@ -301,6 +301,24 @@ final class StatsTests: XCTestCase {
         XCTAssertEqual(broken.streak, 0, "a missed week resets the streak")
     }
 
+    func testCardioCountsTowardTheWeek() {
+        // Two lifts this week plus a run; two walks on the same day count once.
+        let status = Streak.status(dates: [ago(1), ago(3)], cardioDates: [ago(2), ago(2).addingTimeInterval(-3600)],
+                                   goal: 3, now: now, calendar: calendar)
+        XCTAssertEqual(status.thisWeek, 3)
+        XCTAssertEqual(status.lifts, 2)
+        XCTAssertEqual(status.cardio, 1)
+        XCTAssertTrue(status.goalReached)
+        XCTAssertEqual(WeekText.breakdown(lifts: status.lifts, cardio: status.cardio), "2 lifts + 1 cardio")
+        XCTAssertEqual(WeekText.breakdown(lifts: 1, cardio: 0), "1 lift")
+
+        // Cardio keeps an earlier week in the streak.
+        let kept = Streak.status(dates: [ago(1), ago(8), ago(9)], cardioDates: [ago(10)], goal: 3, now: now, calendar: calendar)
+        XCTAssertEqual(kept.streak, 1)
+        let without = Streak.status(dates: [ago(1), ago(8), ago(9)], goal: 3, now: now, calendar: calendar)
+        XCTAssertEqual(without.streak, 0)
+    }
+
     func testWeeklySetsPerMuscleGroup() {
         let workouts = [
             workout(1, .chestTriceps, [entry("db_bench", 60, [10, 9, 8]), entry("pushdown", 40, [12, 12])]),
@@ -628,7 +646,77 @@ final class ImportTests: XCTestCase {
     }
 
     func testUnknownNamesBecomeYourOwnExercise() {
-        XCTAssertEqual(Import.match("Hip Thrust (Barbell)"), .custom(name: "Barbell hip thrust", muscle: .glutes, equipmentID: "barbell"))
-        XCTAssertEqual(Import.match("Zottman Curl"), .custom(name: "Zottman curl", muscle: .biceps, equipmentID: "bodyweight"))
+        XCTAssertEqual(Import.match("Jefferson Squat (Barbell)"), .custom(name: "Barbell jefferson squat", muscle: .quads, equipmentID: "barbell"))
+        XCTAssertEqual(Import.match("Hip Thrust (Barbell)"), .builtIn("bb_hip_thrust"))
+    }
+}
+
+final class LibraryTests: XCTestCase {
+    private func first(_ query: String) -> String? { ExerciseSearch.matches(query, in: ExerciseCatalog.all).first?.id }
+    private func found(_ query: String) -> [String] { ExerciseSearch.matches(query, in: ExerciseCatalog.all).map(\.id) }
+
+    func testAboutFourHundredExercisesWithUniqueIdsAndNames() {
+        let all = ExerciseCatalog.builtIn
+        XCTAssertGreaterThan(all.count, 370)
+        XCTAssertEqual(Set(all.map(\.id)).count, all.count)
+        XCTAssertEqual(Set(all.map { $0.name.lowercased() }).count, all.count)
+    }
+
+    func testTheEverydaySetComesFirstAndIsUnchanged() {
+        // The 71 exercises the app had before the library grew.
+        XCTAssertEqual(ExerciseCatalog.builtIn.prefix(ExerciseCatalog.core.count).map(\.id), ExerciseCatalog.core.map(\.id))
+        XCTAssertEqual(ExerciseCatalog.core.count, 71)
+        XCTAssertTrue(ExerciseCatalog.core.allSatisfy { !ExerciseCatalog.moreIDs.contains($0.id) })
+    }
+
+    func testEveryExerciseUsesKnownEquipmentAndASensibleRange() {
+        for exercise in ExerciseCatalog.builtIn {
+            XCTAssertNotNil(EquipmentCatalog.type(exercise.equipment), exercise.id)
+            XCTAssertLessThan(exercise.repLow, exercise.repHigh, exercise.id)
+            XCTAssertNotNil(Overlap.movementName(exercise.pattern), exercise.id)
+        }
+    }
+
+    func testSearchForgivesTyposAndSpacing() {
+        XCTAssertTrue(found("dumbell").contains("db_bench"))
+        XCTAssertTrue(found("dumbell curl").contains("db_curl"))
+        XCTAssertEqual(first("lat pull down"), "lat_pulldown")
+        XCTAssertEqual(first("pulldown"), "lat_pulldown")
+        XCTAssertTrue(found("tricep pushdwn").contains("pushdown"))
+        XCTAssertTrue(found("romainian deadlift").contains("db_rdl"))
+        XCTAssertTrue(found("legpress").contains("leg_press"))
+    }
+
+    func testSearchUnderstandsShorthand() {
+        XCTAssertTrue(found("db press").contains("db_bench"))
+        XCTAssertTrue(found("ohp").contains("bb_ohp"))
+        XCTAssertTrue(found("rdl").contains("bb_rdl"))
+        XCTAssertTrue(found("bb row").contains("bb_row"))
+    }
+
+    func testSearchByMuscleOrEquipmentAndNothingForNonsense() {
+        XCTAssertTrue(found("hamstrings").contains("leg_curl"))
+        XCTAssertTrue(found("kettlebell").contains("kb_swing"))
+        XCTAssertTrue(found("qqqzzz").isEmpty)
+        XCTAssertTrue(found("   ").isEmpty)
+    }
+
+    func testTypoDistance() {
+        XCTAssertEqual(ExerciseSearch.distance("dumbell", "dumbbell"), 1)
+        XCTAssertEqual(ExerciseSearch.distance("cruhc", "crunch"), 2)
+        XCTAssertEqual(ExerciseSearch.distance("rwo", "row"), 1)
+    }
+
+    func testNewExercisesHaveTipsAndTheEverydayOnesKeepTheirOwn() {
+        XCTAssertEqual(FormTips.tips(for: "db_bench").first, "Shoulder blades pinned back and down")
+        XCTAssertFalse(FormTips.tips(for: "bb_hip_thrust").isEmpty)
+        XCTAssertTrue(FormTips.tips(for: "kb_swing").first?.contains("Hike") ?? false)
+    }
+
+    func testSwapsStillPreferTheEverydayExercises() {
+        let gym = GymInfo(id: UUID(), name: "G", equipment: [EquipmentInfo(id: UUID(), typeID: "dumbbells", name: "Dumbbells", increment: 5),
+                                                              EquipmentInfo(id: UUID(), typeID: "barbell", name: "Barbell", increment: 5)])
+        let options = Planner.swapOptions(for: ExerciseCatalog.exercise("db_bench")!, gym: gym, history: History([]))
+        XCTAssertEqual(options.first?.exercise.id, "bb_bench")
     }
 }

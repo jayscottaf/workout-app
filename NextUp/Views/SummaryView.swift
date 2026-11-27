@@ -12,6 +12,8 @@ struct SummaryView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Workout.startedAt, order: .reverse) private var workouts: [Workout]
     @AppStorage("weeklyGoal") private var weeklyGoal = 3
+    @AppStorage(CardioSetting.key) private var cardioCounts = true
+    @EnvironmentObject private var health: HealthService
     @State private var confirmDelete = false
     @State private var appeared = false
     @State private var editing = false
@@ -20,7 +22,8 @@ struct SummaryView: View {
 
     var body: some View {
         let records = workout.prSets
-        let status = Streak.status(dates: Store.finished(workouts).map(\.startedAt), goal: weeklyGoal)
+        let status = Streak.status(dates: Store.finished(workouts).map(\.startedAt),
+                                   cardioDates: cardioCounts ? health.cardio.map(\.date) : [], goal: weeklyGoal)
 
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
@@ -322,6 +325,11 @@ struct SummaryView: View {
     }
 
     private func weekDetail(_ status: WeekStatus) -> String {
+        let mix = status.cardio > 0 ? "\(WeekText.breakdown(lifts: status.lifts, cardio: status.cardio)). " : ""
+        return mix + streakDetail(status)
+    }
+
+    private func streakDetail(_ status: WeekStatus) -> String {
         if status.goalReached {
             return status.streak > 1 ? "That makes \(status.streak) weeks in a row" : "First week of a new streak"
         }

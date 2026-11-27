@@ -273,8 +273,10 @@ final class WatchLink: NSObject, ObservableObject {
         let gym = gym(for: workout)?.info
         let taken = Set(workout.allEntries.map(\.exerciseID))
         return MuscleGroup.allCases.flatMap { group in
+            // The everyday exercises and your own: the full library is too long to scroll on a watch.
             ExerciseCatalog.all
-                .filter { $0.muscle.group == group && !taken.contains($0.id) && Planner.isAvailable($0, gym: gym) }
+                .filter { $0.muscle.group == group && !taken.contains($0.id) && !ExerciseCatalog.moreIDs.contains($0.id)
+                          && Planner.isAvailable($0, gym: gym) }
                 .map { WatchAddOption(id: $0.id, name: $0.name, group: group.title) }
         }
     }

@@ -144,7 +144,13 @@ enum Planner {
                                     detail: swapDetail(candidate, lastSet: lastSet))
             return (score, option)
         }
-        var options = scored.sorted { $0.0 != $1.0 ? $0.0 > $1.0 : $0.1.exercise.name < $1.1.exercise.name }.map(\.1)
+        // Ties: the everyday exercises before the rest of the library, then by name.
+        var options = scored.sorted {
+            if $0.0 != $1.0 { return $0.0 > $1.0 }
+            let a = ExerciseCatalog.moreIDs.contains($0.1.exercise.id), b = ExerciseCatalog.moreIDs.contains($1.1.exercise.id)
+            if a != b { return !a }
+            return $0.1.exercise.name < $1.1.exercise.name
+        }.map(\.1)
         if !options.isEmpty { options[0].isBestMatch = true }
         return options
     }
@@ -152,9 +158,11 @@ enum Planner {
     /// Equivalent exercises this gym cannot do (shown greyed out).
     static func unavailableSwaps(for exercise: ExerciseDef, gym: GymInfo?) -> [ExerciseDef] {
         guard gym != nil else { return [] }
-        return ExerciseCatalog.all.filter {
+        // Everyday exercises first; a handful is enough to say what else would work.
+        let all = ExerciseCatalog.all.filter {
             $0.id != exercise.id && ($0.pattern == exercise.pattern) && !isAvailable($0, gym: gym)
         }
+        return Array((all.filter { !ExerciseCatalog.moreIDs.contains($0.id) } + all.filter { ExerciseCatalog.moreIDs.contains($0.id) }).prefix(6))
     }
 
     private static func swapDetail(_ exercise: ExerciseDef, lastSet: SetRecord?) -> String {

@@ -14,6 +14,7 @@ struct TodayView: View {
     @Query private var prefs: [ExercisePrefs]
     @AppStorage("currentGymID") private var currentGymID = ""
     @AppStorage("weeklyGoal") private var weeklyGoal = 3
+    @AppStorage(CardioSetting.key) private var cardioCounts = true
     @AppStorage("absEveryDays") private var absEveryDays = 3
     @AppStorage("keptPairs") private var keptPairs = ""
 
@@ -43,7 +44,8 @@ struct TodayView: View {
         let overrides = Store.rangeOverrides(prefs)
         let plan = customPlan ?? Planner.plan(day: day, includeAbs: includeAbs, quick: false, gym: gym?.info, history: history,
                                                rangeOverrides: overrides)
-        let status = Streak.status(dates: Store.finished(workouts).map(\.startedAt), goal: weeklyGoal)
+        let status = Streak.status(dates: Store.finished(workouts).map(\.startedAt),
+                                   cardioDates: cardioCounts ? health.cardio.map(\.date) : [], goal: weeklyGoal)
         let active = workouts.first { $0.endedAt == nil }
 
         ScrollView {
@@ -388,6 +390,14 @@ struct TodayView: View {
                     .foregroundStyle(Theme.muted)
             }
             SegmentBar(filled: status.thisWeek, total: status.goal)
+            if status.cardio > 0 {
+                Text(WeekText.breakdown(lifts: status.lifts, cardio: status.cardio))
+                    .scaledFont(13)
+                    .foregroundStyle(Theme.muted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .accessibilityIdentifier("weekBreakdown")
+            }
         }
         .card()
         .accessibilityElement(children: .combine)
@@ -522,7 +532,7 @@ struct TodayView: View {
     private var cardioCard: some View {
         if health.connected {
             HStack(spacing: 12) {
-                Image(systemName: "figure.run")
+                Image(systemName: health.cardio.first?.kind.symbol ?? "figure.run")
                     .scaledFont(17, weight: .bold)
                     .foregroundStyle(Theme.blue)
                     .frame(width: 40, height: 40)
@@ -537,8 +547,8 @@ struct TodayView: View {
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("No runs or walks yet").scaledFont(15, weight: .bold)
-                        Text("They appear here from Apple Health")
+                        Text("No cardio yet").scaledFont(15, weight: .bold)
+                        Text("Runs, rides and more appear here from Apple Health")
                             .scaledFont(13)
                             .foregroundStyle(Theme.muted)
                     }
@@ -559,7 +569,7 @@ struct TodayView: View {
                         .background(Theme.blueDim, in: Circle())
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Connect Apple Health").scaledFont(15, weight: .bold)
-                        Text("Shows your runs and walks, saves your lifting")
+                        Text("Shows your cardio, saves your lifting")
                             .scaledFont(13)
                             .foregroundStyle(Theme.muted)
                     }

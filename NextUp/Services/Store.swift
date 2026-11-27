@@ -226,7 +226,8 @@ enum Store {
             .compactMap { candidate -> (Int, ExerciseDef)? in
                 let theirs = words(candidate.name)
                 guard mine.isSubset(of: theirs) || theirs.isSubset(of: mine) else { return nil }
-                return (theirs.symmetricDifference(mine).count, candidate)
+                // The everyday exercises first, then the rest of the library.
+                return (theirs.symmetricDifference(mine).count + (ExerciseCatalog.moreIDs.contains(candidate.id) ? 100 : 0), candidate)
             }
             .sorted { $0.0 < $1.0 }
             .prefix(3)

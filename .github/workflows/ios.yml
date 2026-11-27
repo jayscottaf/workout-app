@@ -102,7 +102,7 @@ jobs:
               for test in json.load(open(manifest)):
                   for a in test.get("attachments", []):
                       name = a.get("suggestedHumanReadableName", "")
-                      if not name.startswith(("5", "01-", "02-", "04-")):
+                      if not name.startswith(("5", "6", "7", "01-", "02-", "04-", "17a")):
                           continue
                       src = os.path.join(folder, a["exportedFileName"])
                       out = "/tmp/shot.jpg"

@@ -10,6 +10,7 @@ struct SwapSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @State private var showAll = false
 
     var body: some View {
         let current = entry.exercise
@@ -35,7 +36,8 @@ struct SwapSheet: View {
                 }
 
                 VStack(spacing: 8) {
-                    ForEach(options, id: \.exercise.id) { option in
+                    // The closest eight; the rest of the library on request.
+                    ForEach(showAll ? options : Array(options.prefix(8)), id: \.exercise.id) { option in
                         Button { onPick(option.exercise) } label: {
                             HStack(spacing: 12) {
                                 VStack(alignment: .leading, spacing: 3) {
@@ -71,6 +73,13 @@ struct SwapSheet: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("swap-\(option.exercise.id)")
+                    }
+                    if !showAll, options.count > 8 {
+                        Button("Show \(options.count - 8) more") { showAll = true }
+                            .scaledFont(14, weight: .semibold)
+                            .foregroundStyle(Theme.volt)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .accessibilityIdentifier("moreSwaps")
                     }
                 }
 
@@ -122,121 +131,6 @@ struct SwapSheet: View {
     }
 }
 
-/// Pick any exercise this gym can do, grouped by muscle group.
-struct AddExerciseSheet: View {
-    let gym: Gym?
-    let excluded: Set<String>
-    /// Exercises already in the workout or day, in order, to warn about ones that do the same job.
-    var current: [String] = []
-    let onPick: (ExerciseDef) -> Void
-    @AppStorage("keptPairs") private var keptPairs = ""
-    @State private var creating = false
-    @Environment(\.modelContext) private var context
-
-    var body: some View {
-        let info = gym?.info
-        let already = current.compactMap { ExerciseCatalog.exercise($0) }
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Add an exercise")
-                    .scaledFont(26, weight: .heavy, design: .rounded)
-                    .accessibilityAddTraits(.isHeader)
-                Button { creating = true } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Create your own").scaledFont(16, weight: .semibold)
-                            Text("Not on the list? Add it once and it stays.")
-                                .scaledFont(13)
-                                .foregroundStyle(Theme.muted)
-                        }
-                        Spacer()
-                        Image(systemName: "square.and.pencil").foregroundStyle(Theme.volt)
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(minHeight: 56)
-                    .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("createExercise")
-                ForEach(MuscleGroup.allCases, id: \.self) { group in
-                    let all = ExerciseCatalog.all.filter { $0.muscle.group == group && !excluded.contains($0.id) }
-                    let exercises = all.filter { Planner.isAvailable($0, gym: info) }
-                    let unticked = all.filter { !Planner.isAvailable($0, gym: info) }
-                    if !all.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            CapsLabel(group.title)
-                            VStack(spacing: 0) {
-                                ForEach(exercises) { exercise in
-                                    Button { onPick(exercise) } label: {
-                                        HStack {
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text(exercise.name).scaledFont(16, weight: .semibold)
-                                                Text("\(exercise.muscle.title) · \(exercise.equipmentType.name)")
-                                                    .scaledFont(13)
-                                                    .foregroundStyle(Theme.muted)
-                                                if let overlap = Overlap.find(exercise, among: already, kept: Overlap.keptPairs(keptPairs)) {
-                                                    Label(overlap.message, systemImage: "exclamationmark.2")
-                                                        .scaledFont(13)
-                                                        .foregroundStyle(Theme.amber)
-                                                        .fixedSize(horizontal: false, vertical: true)
-                                                }
-                                            }
-                                            Spacer()
-                                            Image(systemName: "plus").foregroundStyle(Theme.volt)
-                                        }
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 6)
-                                        .frame(minHeight: 56)
-                                        .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityIdentifier("add-\(exercise.id)")
-                                }
-                                // Equipment not ticked at this gym yet: picking one ticks it here and adds the exercise.
-                                ForEach(unticked) { exercise in
-                                    Button {
-                                        if let gym { Store.setHas(exercise.equipmentType, true, gym: gym, context: context) }
-                                        onPick(exercise)
-                                    } label: {
-                                        HStack {
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text(exercise.name).scaledFont(16, weight: .semibold)
-                                                    .foregroundStyle(Theme.text.opacity(0.75))
-                                                Text("\(exercise.equipmentType.name) · not ticked here yet, tap to add")
-                                                    .scaledFont(13)
-                                                    .foregroundStyle(Theme.muted)
-                                            }
-                                            Spacer()
-                                            Image(systemName: "plus.circle").foregroundStyle(Theme.muted)
-                                        }
-                                        .padding(.horizontal, 16)
-                                        .frame(minHeight: 56)
-                                        .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-                                    .accessibilityIdentifier("addNew-\(exercise.id)")
-                                }
-                            }
-                            .background(Theme.surface2, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                        }
-                    }
-                }
-            }
-            .padding(20)
-            .padding(.top, 8)
-        }
-        .foregroundStyle(Theme.text)
-        .presentationDragIndicator(.visible)
-        .presentationBackground(Theme.surface)
-        .sheet(isPresented: $creating) {
-            CreateExerciseSheet(gym: gym) { exercise in
-                creating = false
-                onPick(exercise)
-            }
-        }
-    }
-}
 
 /// Weekly goal, abs frequency, Apple Health and rep ranges.
 struct SettingsView: View {
@@ -245,6 +139,7 @@ struct SettingsView: View {
     @EnvironmentObject private var health: HealthService
     @Query private var prefs: [ExercisePrefs]
     @AppStorage("weeklyGoal") private var weeklyGoal = 3
+    @AppStorage(CardioSetting.key) private var cardioCounts = true
     @AppStorage("absEveryDays") private var absEveryDays = 3
     @AppStorage(RestSetting.key) private var restSeconds = 0
     @AppStorage(Units.key) private var unitRaw = WeightUnit.lb.rawValue
@@ -256,13 +151,15 @@ struct SettingsView: View {
             Form {
                 Section {
                     Stepper("Weekly goal: \(weeklyGoal) workout\(weeklyGoal == 1 ? "" : "s")", value: $weeklyGoal, in: 1...7)
+                    Toggle("Cardio counts toward the goal", isOn: $cardioCounts)
+                        .accessibilityIdentifier("cardioCounts")
                     Stepper("Offer abs every \(absEveryDays) day\(absEveryDays == 1 ? "" : "s")", value: $absEveryDays, in: 1...14)
                     NavigationLink("Days and exercises") { RoutineEditor() }
                         .accessibilityIdentifier("routine")
                 } header: {
                     Text("Routine")
                 } footer: {
-                    Text("Days and exercises is where you rename days, add or remove them, change what each one starts with, or switch to a ready-made routine. Your streak counts weeks where you reach the weekly goal, not individual days.")
+                    Text("Days and exercises is where you rename days, add or remove them, change what each one starts with, or switch to a ready-made routine. Your streak counts weeks where you reach the weekly goal, not individual days. With cardio counting, each day with a run, ride or other cardio workout in Apple Health counts as one workout.")
                 }
 
                 Section {
@@ -317,7 +214,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Apple Health")
                 } footer: {
-                    Text("Reads your runs, walks and body weight. Saves each lifting session as a strength workout.")
+                    Text("Reads your cardio workouts (runs, walks, rides, elliptical, stairs, hikes and more) and body weight. Saves each lifting session as a strength workout.")
                 }
 
                 Section {

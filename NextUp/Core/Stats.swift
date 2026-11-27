@@ -99,30 +99,41 @@ struct WeekStatus: Equatable {
     /// Weeks in a row that reached the goal. The current week counts once it is reached,
     /// and an unfinished current week never breaks the streak.
     var streak: Int
+    /// This week's lifting sessions and cardio days. `thisWeek` is their sum when cardio counts.
+    var lifts: Int = 0
+    var cardio: Int = 0
 
     var goalReached: Bool { thisWeek >= goal }
     var remaining: Int { max(0, goal - thisWeek) }
 }
 
 enum Streak {
-    static func status(dates: [Date], goal: Int, now: Date = Date(), calendar: Calendar = .current) -> WeekStatus {
+    /// `cardioDates` are cardio workouts from Apple Health. Each day with cardio counts once,
+    /// whatever else happened that day, so two walks in a day don't count twice.
+    static func status(dates: [Date], cardioDates: [Date] = [], goal: Int, now: Date = Date(),
+                       calendar: Calendar = .current) -> WeekStatus {
         let goal = max(1, goal)
         guard let thisWeekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start else {
             return WeekStatus(thisWeek: 0, goal: goal, streak: 0)
         }
-        var counts: [Date: Int] = [:]
+        var lifts: [Date: Int] = [:]
         for date in dates {
-            if let start = calendar.dateInterval(of: .weekOfYear, for: date)?.start { counts[start, default: 0] += 1 }
+            if let start = calendar.dateInterval(of: .weekOfYear, for: date)?.start { lifts[start, default: 0] += 1 }
         }
-        let thisWeek = counts[thisWeekStart] ?? 0
+        var cardio: [Date: Int] = [:]
+        for day in Set(cardioDates.map { calendar.startOfDay(for: $0) }) {
+            if let start = calendar.dateInterval(of: .weekOfYear, for: day)?.start { cardio[start, default: 0] += 1 }
+        }
+        func total(_ week: Date) -> Int { (lifts[week] ?? 0) + (cardio[week] ?? 0) }
+        let thisWeek = total(thisWeekStart)
         var streak = thisWeek >= goal ? 1 : 0
         var cursor = thisWeekStart
-        while let previous = calendar.date(byAdding: .weekOfYear, value: -1, to: cursor),
-              (counts[previous] ?? 0) >= goal {
+        while let previous = calendar.date(byAdding: .weekOfYear, value: -1, to: cursor), total(previous) >= goal {
             streak += 1
             cursor = previous
         }
-        return WeekStatus(thisWeek: thisWeek, goal: goal, streak: streak)
+        return WeekStatus(thisWeek: thisWeek, goal: goal, streak: streak,
+                          lifts: lifts[thisWeekStart] ?? 0, cardio: cardio[thisWeekStart] ?? 0)
     }
 }
 

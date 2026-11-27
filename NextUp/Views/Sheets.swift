@@ -347,6 +347,8 @@ struct SettingsView: View {
                 Section {
                     LabeledContent("Version", value: Self.versionText)
                         .accessibilityIdentifier("appVersion")
+                    Link("Privacy policy", destination: Self.privacyPolicyURL)
+                        .accessibilityIdentifier("privacyPolicy")
                 }
             }
             .navigationTitle("Settings")
@@ -359,6 +361,9 @@ struct SettingsView: View {
 }
 
 extension SettingsView {
+    /// The published privacy policy (a Google Site; the text is in docs/privacy.md). Also goes in App Store Connect.
+    static let privacyPolicyURL = URL(string: "https://sites.google.com/view/next-up-privacy-policy")!
+
     /// "1.0 (build 12)", matching the version and build TestFlight shows.
     static var versionText: String {
         let info = Bundle.main.infoDictionary

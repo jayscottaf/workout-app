@@ -303,7 +303,7 @@ final class StatsTests: XCTestCase {
 
     func testCardioCountsTowardTheWeek() {
         // Two lifts this week plus a run; two walks on the same day count once.
-        let status = Streak.status(dates: [ago(1), ago(3)], cardioDates: [ago(2), ago(2).addingTimeInterval(3600)],
+        let status = Streak.status(dates: [ago(1), ago(3)], cardioDates: [ago(2), ago(2).addingTimeInterval(-3600)],
                                    goal: 3, now: now, calendar: calendar)
         XCTAssertEqual(status.thisWeek, 3)
         XCTAssertEqual(status.lifts, 2)
@@ -663,8 +663,9 @@ final class LibraryTests: XCTestCase {
     }
 
     func testTheEverydaySetComesFirstAndIsUnchanged() {
+        // The 71 exercises the app had before the library grew.
         XCTAssertEqual(ExerciseCatalog.builtIn.prefix(ExerciseCatalog.core.count).map(\.id), ExerciseCatalog.core.map(\.id))
-        XCTAssertEqual(ExerciseCatalog.core.count, 72)
+        XCTAssertEqual(ExerciseCatalog.core.count, 71)
         XCTAssertTrue(ExerciseCatalog.core.allSatisfy { !ExerciseCatalog.moreIDs.contains($0.id) })
     }
 

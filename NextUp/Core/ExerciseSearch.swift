@@ -12,7 +12,12 @@ enum ExerciseSearch {
             .compactMap { exercise -> (Double, ExerciseDef)? in
                 score(words, compactQuery: compactQuery, exercise).map { ($0, exercise) }
             }
-            .sorted { $0.0 != $1.0 ? $0.0 > $1.0 : $0.1.name < $1.1.name }
+            // Equal scores: the closest name first ("Lat pulldown" before "Close-grip lat pulldown").
+            .sorted {
+                if $0.0 != $1.0 { return $0.0 > $1.0 }
+                if $0.1.name.count != $1.1.name.count { return $0.1.name.count < $1.1.name.count }
+                return $0.1.name < $1.1.name
+            }
             .map(\.1)
     }
 

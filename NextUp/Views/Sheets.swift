@@ -247,6 +247,7 @@ struct SettingsView: View {
     @AppStorage("weeklyGoal") private var weeklyGoal = 3
     @AppStorage("absEveryDays") private var absEveryDays = 3
     @AppStorage(RestSetting.key) private var restSeconds = 0
+    @AppStorage(Units.key) private var unitRaw = WeightUnit.lb.rawValue
 
     @AppStorage("keptPairs") private var keptPairs = ""
 
@@ -282,10 +283,28 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Picker("Weights in", selection: Binding(
+                        get: { WeightUnit(rawValue: unitRaw) ?? .lb },
+                        set: { unit in
+                            Store.switchUnit(to: unit, context: context)
+                            unitRaw = unit.rawValue
+                            WatchLink.shared.push()
+                        })) {
+                        Text("Pounds (lb)").tag(WeightUnit.lb)
+                        Text("Kilograms (kg)").tag(WeightUnit.kg)
+                    }
+                    .accessibilityIdentifier("weightUnit")
+                } header: {
+                    Text("Units")
+                } footer: {
+                    Text("Changes how weights are shown and typed, the plates you load (20 kg bar and kilogram plates) and the weight steps (5 lb becomes 2.5 kg). Your logged workouts are not changed.")
+                }
+
+                Section {
                     if health.connected {
                         Label("Connected", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.volt)
                         if let weight = health.bodyWeight {
-                            LabeledContent("Body weight", value: "\(String(format: "%.1f", weight)) lb")
+                            LabeledContent("Body weight", value: Fmt.lb(weight))
                         }
                     } else if health.isAvailable {
                         Button("Connect Apple Health") { Task { await health.connect() } }

@@ -87,7 +87,7 @@ final class Workout {
         let upcoming = entry.flatMap { e in e.nextSet.map { (e, $0) } }
             ?? sortedEntries.first { !$0.isDone }.flatMap { other in other.nextSet.map { (other, $0) } }
         guard let (nextEntry, set) = upcoming else { return "" }
-        let amount = set.weight > 0 ? "\(Fmt.weight(set.weight)) lb × \(set.reps)" : "\(set.reps) reps"
+        let amount = set.weight > 0 ? "\(Fmt.lb(set.weight)) × \(set.reps)" : "\(set.reps) reps"
         return "Next: \(nextEntry.name) · \(amount)"
     }
 

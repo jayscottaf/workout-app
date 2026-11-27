@@ -4,12 +4,14 @@ import Foundation
 // so the iPhone, the Apple Watch and the unit tests all use the same file.
 
 enum Plates {
-    /// A standard Olympic bar, in pounds.
-    static let barWeight: Double = 45
-    /// A typical EZ curl bar (the bent one). They vary from about 15 to 25 lb.
-    static let ezBarWeight: Double = 20
-    /// The plates most gyms have, heaviest first.
+    /// A standard Olympic bar, in pounds: 45 lb, or 20 kg when weights are shown in kilograms.
+    static var barWeight: Double { Units.isKg ? 20 * Units.lbPerKg : 45 }
+    /// A typical EZ curl bar (the bent one), in pounds. They vary from about 15 to 25 lb (about 10 kg).
+    static var ezBarWeight: Double { Units.isKg ? 10 * Units.lbPerKg : 20 }
+    /// The plates most gyms have, heaviest first, in pounds.
     static let standard: [Double] = [45, 35, 25, 10, 5, 2.5]
+    /// Kilogram plates, heaviest first, in kilograms.
+    static let standardKg: [Double] = [25, 20, 15, 10, 5, 2.5, 1.25]
 
     /// What to load on each side of the bar to reach `total`.
     /// `leftover` is what is still missing per side when the plates cannot make the exact weight.
@@ -44,8 +46,14 @@ enum Plates {
     }
 
     /// "Each side: 45 + 10 + 2.5", "Just the bar", or nil when plates do not apply.
+    /// `total` and `bar` are in pounds; the plates are pound or kilogram plates to match Settings.
     static func text(total: Double, bar: Double = barWeight) -> String? {
-        guard let load = load(total: total, bar: bar) else { return nil }
+        let kg = Units.isKg
+        let found = kg
+            ? load(total: (total / Units.lbPerKg * 100).rounded() / 100, bar: (bar / Units.lbPerKg * 100).rounded() / 100,
+                   plates: standardKg)
+            : load(total: total, bar: bar)
+        guard let load = found else { return nil }
         if load.perSide.isEmpty && load.leftover == 0 { return bar > 0 ? "Just the bar" : nil }
         var parts: [String] = []
         var index = 0

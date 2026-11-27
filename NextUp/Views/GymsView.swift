@@ -3,6 +3,8 @@ import SwiftData
 
 /// Each gym with its own equipment. Machines keep separate history per gym; free weights share one.
 struct GymsView: View {
+    /// Redraws every weight when pounds or kilograms is changed in Settings.
+    @AppStorage(Units.key) private var weightUnit = WeightUnit.lb.rawValue
     @Environment(\.modelContext) private var context
     @Query(sort: \Gym.createdAt) private var gyms: [Gym]
     @Query private var workouts: [Workout]
@@ -178,7 +180,7 @@ struct GymsView: View {
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.name).font(.system(size: 16, weight: .semibold))
-                                Text("\(item.type?.loading ?? "Equipment") · \(Fmt.weight(item.increment)) lb steps")
+                                Text("\(item.type?.loading ?? "Equipment") · \(Fmt.lb(item.increment)) steps")
                                     .font(.system(size: 13))
                                     .foregroundStyle(Theme.muted)
                             }
@@ -278,7 +280,7 @@ struct AddEquipmentSheet: View {
                         let have = gym.equipment.filter { $0.typeID == type.id }.count
                         Button {
                             let item = Equipment(typeID: type.id, name: have == 0 ? type.name : "\(type.name) \(have + 1)",
-                                                 increment: type.defaultIncrement)
+                                                 increment: type.step)
                             context.insert(item)
                             item.gym = gym
                             try? context.save()
@@ -323,7 +325,8 @@ struct EquipmentEditSheet: View {
                     TextField("Name", text: $equipment.name)
                 }
                 Section {
-                    Stepper("Goes up in \(Fmt.weight(equipment.increment)) lb steps", value: $equipment.increment, in: 1...50, step: 2.5)
+                    Stepper("Goes up in \(Fmt.lb(equipment.increment)) steps", value: $equipment.increment,
+                            in: Units.step(1)...Units.step(50), step: Units.step(2.5))
                 } footer: {
                     Text(equipment.type?.category == .machine
                          ? "This machine keeps its own history, because the same number on a different machine is not the same effort."

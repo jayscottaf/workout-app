@@ -262,6 +262,8 @@ final class WatchModel: NSObject, ObservableObject {
 
     private func apply(_ incoming: WatchSnapshot) {
         if let current = snapshot, incoming.sentAt < current.sentAt { return }
+        // Show weights in the unit chosen on the phone.
+        Units.current = incoming.unit ?? .lb
         var next = incoming
         // Keep sets logged here that the phone has not heard about yet.
         if let active = next.active {

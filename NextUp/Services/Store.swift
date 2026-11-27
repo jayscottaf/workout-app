@@ -105,8 +105,25 @@ enum Store {
         try? context.save()
     }
 
-    /// Weight steps to choose from during a workout.
-    static let stepChoices: [Double] = [2.5, 5, 10]
+    /// Pounds or kilograms. Saved weights stay as they are; every weight step moves to the new
+    /// unit's grid (5 lb becomes 2.5 kg and back) so suggestions land on weights you can load.
+    static func switchUnit(to unit: WeightUnit, context: ModelContext) {
+        let old = Units.current
+        guard old != unit else { return }
+        for equipment in (try? context.fetch(FetchDescriptor<Equipment>())) ?? [] {
+            equipment.increment = Units.convertStep(equipment.increment, from: old, to: unit)
+        }
+        for machine in (try? context.fetch(FetchDescriptor<CustomEquipment>())) ?? [] {
+            machine.increment = Units.convertStep(machine.increment, from: old, to: unit)
+        }
+        let open = (try? context.fetch(FetchDescriptor<Workout>(predicate: #Predicate { $0.endedAt == nil }))) ?? []
+        for entry in open.flatMap(\.entries) {
+            entry.increment = Units.convertStep(entry.increment, from: old, to: unit)
+        }
+        Units.current = unit
+        try? context.save()
+        loadCustom(context)
+    }
 
     /// Change how far one step moves the weight for this exercise. The gym's equipment remembers it for next time.
     static func setIncrement(_ value: Double, for entry: ExerciseEntry, gym: Gym?, context: ModelContext) {
@@ -122,7 +139,7 @@ enum Store {
     static func setHas(_ type: EquipmentType, _ has: Bool, gym: Gym, context: ModelContext) {
         let current = gym.equipment.filter { $0.typeID == type.id }
         if has, current.isEmpty {
-            let item = Equipment(typeID: type.id, name: type.name, increment: type.defaultIncrement)
+            let item = Equipment(typeID: type.id, name: type.name, increment: type.step)
             context.insert(item)
             item.gym = gym
         } else if !has {
@@ -410,7 +427,7 @@ enum Store {
         context.insert(gym)
         for (offset, typeID) in typeIDs.enumerated() {
             guard let type = EquipmentCatalog.type(typeID) else { continue }
-            let item = Equipment(typeID: type.id, name: type.name, increment: type.defaultIncrement)
+            let item = Equipment(typeID: type.id, name: type.name, increment: type.step)
             item.createdAt = Date().addingTimeInterval(Double(offset))
             context.insert(item)
             item.gym = gym

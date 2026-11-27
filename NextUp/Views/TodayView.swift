@@ -3,6 +3,8 @@ import SwiftData
 
 /// Home screen: offers whichever day is next, plus add-ons, weekly goal and cardio.
 struct TodayView: View {
+    /// Redraws every weight when pounds or kilograms is changed in Settings.
+    @AppStorage(Units.key) private var weightUnit = WeightUnit.lb.rawValue
     let onStart: (Workout) -> Void
 
     @Environment(\.modelContext) private var context

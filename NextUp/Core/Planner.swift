@@ -111,7 +111,7 @@ enum Planner {
         let equipment = equipment(for: exercise, gym: gym, history: history)
         let key = HistoryKey.make(exerciseID: exercise.id, equipment: equipment)
         let range = rangeOverrides[exercise.id] ?? exercise.range
-        let increment = equipment?.increment ?? exercise.equipmentType.defaultIncrement
+        let increment = equipment?.increment ?? exercise.equipmentType.step
         let suggestion = Progression.suggest(sessions: history.sessions(for: key), range: range, increment: increment,
                                              starterWeight: exercise.starterWeight, bodyweight: exercise.isBodyweight,
                                              setCount: quick ? 2 : nil, now: now)
@@ -161,10 +161,10 @@ enum Planner {
         let type = exercise.equipmentType
         switch type.category {
         case .machine:
-            if let lastSet { return "\(type.loading) · last time here \(Fmt.weight(lastSet.weight)) lb × \(lastSet.reps)" }
+            if let lastSet { return "\(type.loading) · last time here \(Fmt.lb(lastSet.weight)) × \(lastSet.reps)" }
             return "New machine for you · start light and learn it"
         case .freeWeight:
-            if let lastSet { return "Free weight · same history at every gym · \(Fmt.weight(lastSet.weight)) lb × \(lastSet.reps)" }
+            if let lastSet { return "Free weight · same history at every gym · \(Fmt.lb(lastSet.weight)) × \(lastSet.reps)" }
             return "Free weight · no history yet"
         case .bodyweight:
             if let lastSet { return "Body weight · last time \(lastSet.reps) reps" }

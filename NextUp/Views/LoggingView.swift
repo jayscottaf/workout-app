@@ -23,6 +23,8 @@ private struct RecordBanner: Equatable {
 
 /// Fast set logging: sets are pre-filled, one tap confirms, +/- adjusts, rest starts by itself.
 struct LoggingView: View {
+    /// Redraws every weight when pounds or kilograms is changed in Settings.
+    @AppStorage(Units.key) private var weightUnit = WeightUnit.lb.rawValue
     let workout: Workout
     let onDiscard: () -> Void
 
@@ -399,30 +401,30 @@ struct LoggingView: View {
         [entry.equipmentName, "\(entry.repLow) to \(entry.repHigh) reps"].joined(separator: " · ")
     }
 
-    /// Choose how far + and − move the weight: 2.5, 5 or 10 lb.
+    /// Choose how far + and − move the weight: 2.5, 5 or 10 lb (1.25, 2.5 or 5 kg).
     private func stepMenu(_ entry: ExerciseEntry) -> some View {
         Menu {
-            ForEach(Store.stepChoices, id: \.self) { step in
+            ForEach(Units.stepChoices(), id: \.self) { step in
                 Button {
                     Store.setIncrement(step, for: entry, gym: gym, context: context)
                 } label: {
                     if step == entry.increment {
-                        Label("\(Fmt.weight(step)) lb steps", systemImage: "checkmark")
+                        Label("\(Fmt.lb(step)) steps", systemImage: "checkmark")
                     } else {
-                        Text("\(Fmt.weight(step)) lb steps")
+                        Text("\(Fmt.lb(step)) steps")
                     }
                 }
             }
         } label: {
             HStack(spacing: 4) {
-                Text("\(Fmt.weight(entry.increment)) lb steps")
+                Text("\(Fmt.lb(entry.increment)) steps")
                 Image(systemName: "chevron.down").font(.system(size: 10, weight: .heavy))
             }
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(Theme.volt)
             .frame(minHeight: 30)
         }
-        .accessibilityLabel("Weight steps: \(Fmt.weight(entry.increment)) pounds. Change")
+        .accessibilityLabel("Weight steps: \(Fmt.weight(entry.increment)) \(Units.spoken). Change")
         .accessibilityIdentifier("stepMenu")
     }
 
@@ -438,7 +440,7 @@ struct LoggingView: View {
 
     private func weightText(_ weight: Double, entry: ExerciseEntry?) -> String {
         if weight <= 0 { return "Body weight" }
-        return "\(Fmt.weight(weight)) lb"
+        return Fmt.lb(weight)
     }
 
     private func completedRow(_ set: SetEntry) -> some View {
@@ -479,7 +481,7 @@ struct LoggingView: View {
 
     private func deltaText(_ set: SetEntry) -> String? {
         guard let lastWeight = set.lastWeight, let lastReps = set.lastReps, set.beatLastTime else { return nil }
-        if set.weight > lastWeight { return "+\(Fmt.weight(set.weight - lastWeight)) lb" }
+        if set.weight > lastWeight { return "+\(Fmt.lb(set.weight - lastWeight))" }
         let extra = set.reps - lastReps
         return "+\(extra) rep\(extra == 1 ? "" : "s")"
     }
@@ -515,9 +517,9 @@ struct LoggingView: View {
             }
             HStack(spacing: 10) {
                 stepper(value: set.weight <= 0 ? "BW" : (entry.isBodyweight ? "+" : "") + Fmt.weight(set.weight),
-                        unit: set.weight <= 0 ? "body weight" : (entry.isBodyweight ? "lb held" : "lb"),
-                        lessLabel: "Lower weight by \(Fmt.weight(entry.increment)) pounds",
-                        moreLabel: "Raise weight by \(Fmt.weight(entry.increment)) pounds",
+                        unit: set.weight <= 0 ? "body weight" : (entry.isBodyweight ? "\(Units.symbol) held" : Units.symbol),
+                        lessLabel: "Lower weight by \(Fmt.weight(entry.increment)) \(Units.spoken)",
+                        moreLabel: "Raise weight by \(Fmt.weight(entry.increment)) \(Units.spoken)",
                         less: { set.weight = max(0, set.weight - entry.increment) },
                         more: { set.weight += entry.increment },
                         type: TypeWeightAlert.label(set.weight),
@@ -536,7 +538,7 @@ struct LoggingView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .monospacedDigit()
                     if bar > 0 {
-                        Text("· \(Fmt.weight(bar)) lb bar")
+                        Text("· \(Fmt.lb(bar)) bar")
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.muted)
                     }
@@ -570,7 +572,7 @@ struct LoggingView: View {
             let open = openWarmUps.contains(entry.persistentModelID)
             let low = sets.first.map { Fmt.weight($0.weight) } ?? ""
             let high = sets.last.map { Fmt.weight($0.weight) } ?? ""
-            let range = sets.count > 1 ? "\(low)–\(high) lb" : "\(low) lb"
+            let range = sets.count > 1 ? "\(low)–\(high) \(Units.symbol)" : "\(low) \(Units.symbol)"
             VStack(alignment: .leading, spacing: 8) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
@@ -606,7 +608,7 @@ struct LoggingView: View {
                 if open {
                 ForEach(Array(sets.enumerated()), id: \.offset) { _, set in
                     HStack(spacing: 10) {
-                        Text("\(Fmt.weight(set.weight)) lb × \(set.reps)")
+                        Text("\(Fmt.lb(set.weight)) × \(set.reps)")
                             .font(.system(size: 15, weight: .bold))
                             .monospacedDigit()
                         if let bar, let plates = Plates.text(total: set.weight, bar: bar) {
@@ -857,7 +859,7 @@ struct TypeWeightAlert: ViewModifier {
     @State private var draft = ""
 
     static func label(_ weight: Double) -> String {
-        weight > 0 ? "Weight: \(Fmt.weight(weight)) pounds" : "Weight: body weight"
+        weight > 0 ? "Weight: \(Fmt.weight(weight)) \(Units.spoken)" : "Weight: body weight"
     }
 
     func body(content: Content) -> some View {
@@ -877,7 +879,7 @@ struct TypeWeightAlert: ViewModifier {
             .accessibilityIdentifier("setTypedWeight")
             Button("Cancel", role: .cancel) { draft = "" }
         } message: { _ in
-            Text("In pounds. 0 means body weight only.")
+            Text("In \(Units.spoken). 0 means body weight only.")
         }
     }
 }

@@ -485,3 +485,53 @@ final class ExportTests: XCTestCase {
         XCTAssertTrue(Export.fileName(on: now, timeZone: utc).hasSuffix(".csv"))
     }
 }
+
+final class UnitsTests: XCTestCase {
+    override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: Units.key)
+        super.tearDown()
+    }
+
+    func testPoundsByDefault() {
+        XCTAssertEqual(Units.current, .lb)
+        XCTAssertEqual(Fmt.lb(135), "135 lb")
+        XCTAssertEqual(Units.stepChoices(), [2.5, 5, 10])
+    }
+
+    func testKilogramsShowWithoutChangingSavedPounds() {
+        Units.current = .kg
+        XCTAssertEqual(Fmt.lb(100 * Units.lbPerKg), "100 kg")
+        XCTAssertEqual(Fmt.lb(Units.step(2.5)), "1.25 kg")
+        XCTAssertEqual(Fmt.weight(135), "61.2")
+    }
+
+    func testTypedKilogramsAreSavedAsPounds() {
+        Units.current = .kg
+        XCTAssertEqual(Fmt.parseWeight("100")!, 100 * Units.lbPerKg, accuracy: 0.0001)
+        XCTAssertEqual(Fmt.parseWeight("225 lb"), 225)
+        XCTAssertNil(Fmt.parseWeight("1000"))
+        Units.current = .lb
+        XCTAssertEqual(Fmt.parseWeight("50 kg")!, 50 * Units.lbPerKg, accuracy: 0.0001)
+    }
+
+    func testStepsMoveBetweenGrids() {
+        XCTAssertEqual(Units.convertStep(5, from: .lb, to: .kg), Units.step(5, in: .kg))
+        XCTAssertEqual(Units.convertStep(Units.step(5, in: .kg), from: .kg, to: .lb), 5)
+        XCTAssertEqual(Units.convertStep(Units.step(2.5, in: .kg), from: .kg, to: .lb), 2.5)
+    }
+
+    func testKilogramPlatesOnA20KgBar() {
+        Units.current = .kg
+        XCTAssertEqual(Plates.text(total: 100 * Units.lbPerKg, bar: Plates.barWeight), "Each side: 25 + 15")
+        XCTAssertEqual(Plates.text(total: 20 * Units.lbPerKg, bar: Plates.barWeight), "Just the bar")
+        XCTAssertEqual(Plates.text(total: 62.5 * Units.lbPerKg, bar: Plates.barWeight), "Each side: 20 + 1.25")
+    }
+
+    func testExportUsesTheChosenUnit() {
+        let set = ExportSet(date: Date(timeIntervalSince1970: 0), workout: "W", gym: "G", exercise: "Squat", muscle: "Quads",
+                            compound: true, equipment: "Barbell", setNumber: 1, weight: 100 * Units.lbPerKg, reps: 5, pr: nil)
+        let csv = Export.csv([set], unit: .kg, timeZone: TimeZone(identifier: "UTC")!)
+        XCTAssertTrue(csv.contains("Weight (kg)"))
+        XCTAssertTrue(csv.contains(",1,100,5,500,"))
+    }
+}

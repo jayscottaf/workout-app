@@ -94,7 +94,7 @@ final class WatchLink: NSObject, ObservableObject {
     private func makeSnapshot() -> WatchSnapshot? {
         guard context != nil else { return nil }
         let workouts = fetchWorkouts()
-        var snapshot = WatchSnapshot(restOverride: RestSetting.current, rest: RestTimer.shared.shared, sentAt: Date())
+        var snapshot = WatchSnapshot(restOverride: RestSetting.current, rest: RestTimer.shared.shared, unit: Units.current, sentAt: Date())
 
         if let active = workouts.first(where: { $0.endedAt == nil }) {
             snapshot.active = WatchWorkout(

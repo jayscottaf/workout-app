@@ -19,6 +19,8 @@ private struct LiftOption: Identifiable, Hashable {
 
 /// Records, estimated strength chart, weekly volume per muscle group, calendar and monthly recap.
 struct ProgressScreen: View {
+    /// Redraws every weight when pounds or kilograms is changed in Settings.
+    @AppStorage(Units.key) private var weightUnit = WeightUnit.lb.rawValue
     @EnvironmentObject private var health: HealthService
     @Query(sort: \Workout.startedAt, order: .reverse) private var workouts: [Workout]
     @Query(sort: \Gym.createdAt) private var gyms: [Gym]
@@ -60,7 +62,7 @@ struct ProgressScreen: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             CapsLabel("Body weight")
-                            Text("\(String(format: "%.1f", weight)) lb").font(Theme.rounded(24))
+                            Text(Fmt.lb(weight)).font(Theme.rounded(24))
                         }
                         Spacer()
                         Text("from Apple Health\(health.bodyWeightDate.map { " · \($0.shortDay)" } ?? "")")
@@ -146,7 +148,7 @@ struct ProgressScreen: View {
 
                 if let latest = points.last, let first = points.first {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("\(Int(latest.value.rounded())) lb").font(Theme.rounded(28))
+                        Text("\(Int(Units.shown(latest.value).rounded())) \(Units.symbol)").font(Theme.rounded(28))
                         Text(changeText(first: first, latest: latest, count: points.count))
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(latest.value >= first.value ? Theme.volt : Theme.muted)
@@ -154,11 +156,11 @@ struct ProgressScreen: View {
                 }
 
                 Chart(points) { point in
-                    LineMark(x: .value("Session", point.index), y: .value("Estimated max", point.value))
+                    LineMark(x: .value("Session", point.index), y: .value("Estimated max", Units.shown(point.value)))
                         .foregroundStyle(Theme.volt)
                         .interpolationMethod(.monotone)
                         .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-                    PointMark(x: .value("Session", point.index), y: .value("Estimated max", point.value))
+                    PointMark(x: .value("Session", point.index), y: .value("Estimated max", Units.shown(point.value)))
                         .foregroundStyle(Theme.volt)
                         .symbolSize(28)
                 }
@@ -209,12 +211,12 @@ struct ProgressScreen: View {
 
     private func changeText(first: StrengthPoint, latest: StrengthPoint, count: Int) -> String {
         guard count > 1 else { return "first session logged" }
-        let change = Int((latest.value - first.value).rounded())
+        let change = Int(Units.shown(latest.value - first.value).rounded())
         let since = Calendar.current.isDate(first.date, inSameDayAs: latest.date)
             ? "your first session"
             : first.date.formatted(.dateTime.month(.abbreviated).day())
-        if change > 0 { return "up \(change) lb since \(since)" }
-        if change < 0 { return "down \(-change) lb since \(since)" }
+        if change > 0 { return "up \(change) \(Units.symbol) since \(since)" }
+        if change < 0 { return "down \(-change) \(Units.symbol) since \(since)" }
         return "level since \(since)"
     }
 
@@ -353,7 +355,7 @@ struct ProgressScreen: View {
                             .foregroundStyle(Theme.muted)
                     }
                     Spacer(minLength: 8)
-                    Text(item.set.weight > 0 ? "\(Fmt.weight(item.set.weight)) lb × \(item.set.reps)" : "\(item.set.reps) reps")
+                    Text(item.set.weight > 0 ? "\(Fmt.lb(item.set.weight)) × \(item.set.reps)" : "\(item.set.reps) reps")
                         .font(.system(size: 15, weight: .heavy))
                         .monospacedDigit()
                         .foregroundStyle(Theme.volt)

@@ -74,8 +74,13 @@ struct EquipmentType: Identifiable, Hashable {
     let id: String
     let name: String
     let category: EquipmentCategory
+    /// In pounds, for built-in equipment on the pound grid (5 lb); see `step`.
     let defaultIncrement: Double
     let loading: String
+
+    /// The starting weight step in the unit chosen in Settings, saved in pounds (5 lb, or 2.5 kg).
+    /// Machines you added already have a step you chose, so it is used as is.
+    var step: Double { id.hasPrefix("custom-") ? defaultIncrement : Units.step(defaultIncrement) }
 }
 
 enum EquipmentCatalog {
@@ -92,7 +97,7 @@ enum EquipmentCatalog {
         EquipmentType(id: "dumbbells", name: "Dumbbells", category: .freeWeight, defaultIncrement: 5, loading: "Free weight"),
         EquipmentType(id: "barbell", name: "Barbell and plates", category: .freeWeight, defaultIncrement: 5, loading: "Free weight"),
         EquipmentType(id: "ezBar", name: "EZ curl bar (bent bar)", category: .freeWeight, defaultIncrement: 5,
-                      loading: "Free weight · bar about 20 lb"),
+                      loading: "Free weight · bar about 20 lb (10 kg)"),
         EquipmentType(id: "pullupBar", name: "Pull-up bar", category: .bodyweight, defaultIncrement: 5, loading: "Body weight"),
         EquipmentType(id: "dipStation", name: "Dip station", category: .bodyweight, defaultIncrement: 5, loading: "Body weight"),
         EquipmentType(id: "backExtension", name: "Back extension bench", category: .bodyweight, defaultIncrement: 5,
@@ -425,25 +430,32 @@ enum AbsAddOn {
 }
 
 enum Fmt {
-    /// 120 -> "120", 122.5 -> "122.5"
-    static func weight(_ w: Double) -> String {
-        if w == w.rounded() { return String(Int(w)) }
-        return String(format: "%.1f", w)
-    }
+    /// A saved weight (pounds) as a number in the unit chosen in Settings: 120 -> "120", 122.5 -> "122.5".
+    static func weight(_ w: Double) -> String { Units.number(w) }
 
-    static func lb(_ w: Double) -> String { "\(weight(w)) lb" }
+    /// "120 lb" or "54.5 kg".
+    static func lb(_ w: Double) -> String { "\(weight(w)) \(Units.symbol)" }
 
-    /// A weight the lifter typed, in pounds: "225", "122.5", "122,5" or "225 lb".
-    /// Rounded to one decimal place, the precision the app shows. Nil for anything that isn't
-    /// a weight from 0 (body weight) to 2,000 lb, so a stray typo leaves the set unchanged.
-    static func parseWeight(_ text: String) -> Double? {
+    /// A weight the lifter typed, returned in pounds: "225", "122.5", "122,5", "225 lb" or "100 kg".
+    /// A number on its own is read in `unit`; "lb" or "kg" after it wins. Rounded to the precision the app
+    /// shows (0.1 lb, 0.05 kg). Nil for anything that isn't a weight from 0 (body weight) to 2,000 lb,
+    /// so a stray typo leaves the set unchanged.
+    static func parseWeight(_ text: String, unit: WeightUnit = Units.current) -> Double? {
         var t = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        for suffix in ["lbs", "lb"] where t.hasSuffix(suffix) {
+        var unit = unit
+        for (suffix, meant) in [("lbs", WeightUnit.lb), ("lb", .lb), ("kgs", .kg), ("kg", .kg)] where t.hasSuffix(suffix) {
             t = String(t.dropLast(suffix.count)).trimmingCharacters(in: .whitespaces)
+            unit = meant
             break
         }
         t = t.replacingOccurrences(of: ",", with: ".")
-        guard !t.isEmpty, let value = Double(t), value.isFinite, value >= 0, value <= 2000 else { return nil }
-        return (value * 10).rounded() / 10
+        guard !t.isEmpty, let value = Double(t), value.isFinite, value >= 0 else { return nil }
+        let pounds: Double
+        if unit == .kg {
+            pounds = Units.pounds((value * 20).rounded() / 20, from: .kg)
+        } else {
+            pounds = (value * 10).rounded() / 10
+        }
+        return pounds <= 2000 ? pounds : nil
     }
 }

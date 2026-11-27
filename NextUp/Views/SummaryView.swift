@@ -3,6 +3,8 @@ import SwiftData
 
 /// Post-workout summary (and the detail view when opening a past workout from the calendar).
 struct SummaryView: View {
+    /// Redraws every weight when pounds or kilograms is changed in Settings.
+    @AppStorage(Units.key) private var weightUnit = WeightUnit.lb.rawValue
     let workout: Workout
     var isFresh = false
     let onDone: () -> Void
@@ -45,7 +47,7 @@ struct SummaryView: View {
                 HStack(spacing: 12) {
                     stat(durationText, "time")
                     stat("\(workout.completedSets.count)", "sets")
-                    stat(Int(workout.totalVolume).formatted(), "lb moved")
+                    stat(Int(Units.shown(workout.totalVolume)).formatted(), "\(Units.symbol) moved")
                 }
 
                 VStack(alignment: .leading, spacing: 10) {

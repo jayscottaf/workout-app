@@ -4,6 +4,8 @@ import SwiftData
 /// Fix a workout after the fact: change the weight or reps of a set, or remove a set logged by mistake.
 /// When it closes, personal records are worked out again across all workouts.
 struct EditWorkoutSheet: View {
+    /// Redraws every weight when pounds or kilograms is changed in Settings.
+    @AppStorage(Units.key) private var weightUnit = WeightUnit.lb.rawValue
     let workout: Workout
 
     @Environment(\.modelContext) private var context
@@ -54,7 +56,7 @@ struct EditWorkoutSheet: View {
     }
 
     private func label(_ set: SetEntry) -> String {
-        set.weight > 0 ? "\(Fmt.weight(set.weight)) lb × \(set.reps)" : "\(set.reps) reps"
+        set.weight > 0 ? "\(Fmt.lb(set.weight)) × \(set.reps)" : "\(set.reps) reps"
     }
 
     private func row(_ set: SetEntry) -> some View {
@@ -86,7 +88,7 @@ struct EditWorkoutSheet: View {
     private func editor(_ set: SetEntry, entry: ExerciseEntry) -> some View {
         VStack(spacing: 10) {
             HStack(spacing: 8) {
-                stepper(value: set.weight <= 0 ? "BW" : Fmt.weight(set.weight), unit: set.weight <= 0 ? "body weight" : "lb",
+                stepper(value: set.weight <= 0 ? "BW" : Fmt.weight(set.weight), unit: set.weight <= 0 ? "body weight" : Units.symbol,
                         lessLabel: "Lower weight", moreLabel: "Raise weight",
                         less: { set.weight = max(0, set.weight - entry.increment) },
                         more: { set.weight += entry.increment },
